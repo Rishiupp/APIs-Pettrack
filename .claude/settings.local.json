@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod:*)",
+      "Bash(mkdir:*)",
+      "Bash(npx prisma migrate dev:*)"
+    ],
+    "deny": []
+  }
+}

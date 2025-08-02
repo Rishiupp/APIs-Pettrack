@@ -1,0 +1,23 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const admin_controller_1 = require("../../controllers/admin/admin.controller");
+const authenticate_1 = require("../../middleware/auth/authenticate");
+const authorize_1 = require("../../middleware/auth/authorize");
+const router = (0, express_1.Router)();
+router.use(authenticate_1.authenticate);
+router.use(authorize_1.requireAdmin);
+router.get('/dashboard/overview', admin_controller_1.AdminController.getDashboardOverview);
+router.get('/system/stats', admin_controller_1.AdminController.getSystemStats);
+router.get('/analytics/pets', admin_controller_1.AdminController.getPetAnalytics);
+router.get('/analytics/qr', admin_controller_1.AdminController.getQRAnalytics);
+router.get('/analytics/revenue', admin_controller_1.AdminController.getRevenueAnalytics);
+router.get('/analytics/users', admin_controller_1.AdminController.getUserAnalytics);
+router.get('/qr-codes/pools', admin_controller_1.AdminController.getQRCodePools);
+router.post('/qr-codes/pools', admin_controller_1.AdminController.createQRCodePool);
+router.post('/qr-codes/generate', admin_controller_1.AdminController.generateQRCodes);
+router.get('/users', admin_controller_1.AdminController.getAllUsers);
+router.post('/users/:userId/suspend', admin_controller_1.AdminController.suspendUser);
+router.post('/users/:userId/reactivate', admin_controller_1.AdminController.reactivateUser);
+exports.default = router;
+//# sourceMappingURL=index.js.map

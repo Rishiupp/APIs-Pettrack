@@ -1,0 +1,439 @@
+import Razorpay from 'razorpay';
+import { PaymentStatus, PaymentPurpose } from '@prisma/client';
+import prisma from '../../config/database';
+import { CryptoUtil } from '../../utils/crypto';
+import { AppError } from '../../types';
+import { config } from '../../config';
+import { PaymentOrder, PaymentVerification } from '../../types';
+
+export class RazorpayService {
+  private static razorpay = new Razorpay({
+    key_id: config.razorpay.keyId,
+    key_secret: config.razorpay.keySecret,
+  });
+
+  static async createPaymentOrder(userId: string, orderData: PaymentOrder) {
+    const { petId, amount, currency, purpose } = orderData;
+
+    // Validate the order
+    await this.validatePaymentOrder(userId, orderData);
+
+    // Create Razorpay order
+    const razorpayOrder = await this.razorpay.orders.create({
+      amount: Math.round(amount * 100), // Convert to paise
+      currency: currency.toUpperCase(),
+      notes: {
+        petId,
+        userId,
+        purpose,
+      },
+    });
+
+    // Create payment event record
+    const paymentEvent = await prisma.paymentEvent.create({
+      data: {
+        userId,
+        petId,
+        amount,
+        currency: currency.toUpperCase(),
+        paymentPurpose: purpose as PaymentPurpose,
+        status: PaymentStatus.initiated,
+        razorpayOrderId: razorpayOrder.id,
+      },
+    });
+
+    return {
+      paymentEventId: paymentEvent.id,
+      razorpayOrderId: razorpayOrder.id,
+      amount: Number(razorpayOrder.amount) / 100, // Convert back to rupees
+      currency: razorpayOrder.currency,
+      createdAt: razorpayOrder.created_at,
+    };
+  }
+
+  static async verifyPayment(paymentEventId: string, verificationData: PaymentVerification) {
+    const { razorpayPaymentId, razorpaySignature } = verificationData;
+
+    // Get payment event
+    const paymentEvent = await prisma.paymentEvent.findUnique({
+      where: { id: paymentEventId },
+    });
+
+    if (!paymentEvent) {
+      throw new AppError('Payment event not found', 404);
+    }
+
+    if (paymentEvent.status !== PaymentStatus.initiated) {
+      throw new AppError('Payment already processed or invalid status', 400);
+    }
+
+    // Verify signature
+    const isValidSignature = CryptoUtil.verifyRazorpaySignature(
+      paymentEvent.razorpayOrderId!,
+      razorpayPaymentId,
+      razorpaySignature,
+      config.razorpay.keySecret
+    );
+
+    if (!isValidSignature) {
+      await prisma.paymentEvent.update({
+        where: { id: paymentEventId },
+        data: {
+          status: PaymentStatus.failed,
+          failureReason: 'Invalid signature',
+        },
+      });
+      throw new AppError('Invalid payment signature', 400);
+    }
+
+    // Get payment details from Razorpay
+    const payment = await this.razorpay.payments.fetch(razorpayPaymentId);
+
+    if (payment.status !== 'captured') {
+      await prisma.paymentEvent.update({
+        where: { id: paymentEventId },
+        data: {
+          status: PaymentStatus.failed,
+          razorpayPaymentId,
+          razorpaySignature,
+          failureReason: `Payment status: ${payment.status}`,
+        },
+      });
+      throw new AppError('Payment not captured', 400);
+    }
+
+    // Update payment event
+    const updatedPaymentEvent = await prisma.paymentEvent.update({
+      where: { id: paymentEventId },
+      data: {
+        status: PaymentStatus.success,
+        razorpayPaymentId,
+        razorpaySignature,
+        paymentMethod: payment.method,
+        completedAt: new Date(),
+      },
+    });
+
+    // Process post-payment actions based on purpose
+    await this.processPostPaymentActions(updatedPaymentEvent);
+
+    return {
+      paymentEvent: updatedPaymentEvent,
+      message: 'Payment verified successfully',
+    };
+  }
+
+  static async handleWebhook(payload: any, signature: string) {
+    // Verify webhook signature
+    const isValidSignature = CryptoUtil.verifyWebhookSignature(
+      JSON.stringify(payload),
+      signature,
+      config.razorpay.webhookSecret
+    );
+
+    if (!isValidSignature) {
+      throw new AppError('Invalid webhook signature', 400);
+    }
+
+    // Store webhook event
+    const webhookEvent = await prisma.paymentWebhook.create({
+      data: {
+        eventId: payload.event,
+        eventType: payload.event,
+        entityType: payload.payload?.payment?.entity || 'unknown',
+        entityId: payload.payload?.payment?.entity?.id || 'unknown',
+        payload,
+        signature,
+        signatureVerified: isValidSignature,
+      },
+    });
+
+    // Process webhook based on event type
+    try {
+      await this.processWebhookEvent(payload);
+      
+      await prisma.paymentWebhook.update({
+        where: { id: webhookEvent.id },
+        data: {
+          processed: true,
+          processedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      await prisma.paymentWebhook.update({
+        where: { id: webhookEvent.id },
+        data: {
+          processingAttempts: { increment: 1 },
+        },
+      });
+      throw error;
+    }
+
+    return { message: 'Webhook processed successfully' };
+  }
+
+  private static async validatePaymentOrder(userId: string, orderData: PaymentOrder) {
+    const { petId, amount, purpose } = orderData;
+
+    // Validate user exists
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || !user.isActive) {
+      throw new AppError('User not found or inactive', 404);
+    }
+
+    // Validate pet exists and user has access
+    if (petId) {
+      const pet = await prisma.pet.findUnique({
+        where: { id: petId },
+        include: { owner: true },
+      });
+
+      if (!pet) {
+        throw new AppError('Pet not found', 404);
+      }
+
+      if (pet.owner.userId !== userId && user.role === 'pet_owner') {
+        throw new AppError('Not authorized for this pet', 403);
+      }
+    }
+
+    // Validate amount
+    if (!amount || amount <= 0) {
+      throw new AppError('Invalid amount', 400);
+    }
+
+    // Validate purpose-specific rules
+    if (purpose === 'qr_registration') {
+      if (!petId) {
+        throw new AppError('Pet ID required for QR registration', 400);
+      }
+
+      // Check if pet already has active QR
+      const existingQR = await prisma.qRCode.findFirst({
+        where: {
+          assignedToPet: petId,
+          status: 'active',
+        },
+      });
+
+      if (existingQR) {
+        throw new AppError('Pet already has an active QR code', 400);
+      }
+
+      // Check for pending payment for the same pet
+      const pendingPayment = await prisma.paymentEvent.findFirst({
+        where: {
+          petId,
+          paymentPurpose: 'qr_registration',
+          status: 'initiated',
+        },
+      });
+
+      if (pendingPayment) {
+        throw new AppError('Payment already in progress for this pet', 400);
+      }
+    }
+  }
+
+  private static async processPostPaymentActions(paymentEvent: any) {
+    switch (paymentEvent.paymentPurpose) {
+      case 'qr_registration':
+        await this.processQRRegistrationPayment(paymentEvent);
+        break;
+      case 'premium_features':
+        await this.processPremiumFeaturesPayment(paymentEvent);
+        break;
+      case 'vet_consultation':
+        await this.processVetConsultationPayment(paymentEvent);
+        break;
+      default:
+        console.log(`No post-payment actions for purpose: ${paymentEvent.paymentPurpose}`);
+    }
+  }
+
+  private static async processQRRegistrationPayment(paymentEvent: any) {
+    // Get an available QR code
+    const availableQR = await prisma.qRCode.findFirst({
+      where: { status: 'available' },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (!availableQR) {
+      throw new AppError('No QR codes available', 500);
+    }
+
+    // Assign QR code to pet
+    await prisma.qRCode.update({
+      where: { id: availableQR.id },
+      data: {
+        status: 'assigned',
+        assignedToPet: paymentEvent.petId,
+        assignedAt: new Date(),
+      },
+    });
+
+    // Update payment event with QR ID
+    await prisma.paymentEvent.update({
+      where: { id: paymentEvent.id },
+      data: { qrId: availableQR.id },
+    });
+
+    // TODO: Send notification to user about successful QR assignment
+    console.log(`QR code ${availableQR.qrCodeString} assigned to pet ${paymentEvent.petId}`);
+  }
+
+  private static async processPremiumFeaturesPayment(paymentEvent: any) {
+    // TODO: Implement premium features activation
+    console.log(`Premium features activated for user ${paymentEvent.userId}`);
+  }
+
+  private static async processVetConsultationPayment(paymentEvent: any) {
+    // TODO: Implement vet consultation booking
+    console.log(`Vet consultation booked for user ${paymentEvent.userId}`);
+  }
+
+  private static async processWebhookEvent(payload: any) {
+    const eventType = payload.event;
+    const paymentData = payload.payload?.payment?.entity;
+
+    switch (eventType) {
+      case 'payment.captured':
+        await this.handlePaymentCaptured(paymentData);
+        break;
+      case 'payment.failed':
+        await this.handlePaymentFailed(paymentData);
+        break;
+      case 'order.paid':
+        await this.handleOrderPaid(payload.payload?.order?.entity);
+        break;
+      default:
+        console.log(`Unhandled webhook event: ${eventType}`);
+    }
+  }
+
+  private static async handlePaymentCaptured(paymentData: any) {
+    const paymentEvent = await prisma.paymentEvent.findFirst({
+      where: { razorpayPaymentId: paymentData.id },
+    });
+
+    if (paymentEvent && paymentEvent.status !== PaymentStatus.success) {
+      await prisma.paymentEvent.update({
+        where: { id: paymentEvent.id },
+        data: {
+          status: PaymentStatus.success,
+          completedAt: new Date(),
+        },
+      });
+    }
+  }
+
+  private static async handlePaymentFailed(paymentData: any) {
+    const paymentEvent = await prisma.paymentEvent.findFirst({
+      where: { razorpayPaymentId: paymentData.id },
+    });
+
+    if (paymentEvent && paymentEvent.status === PaymentStatus.initiated) {
+      await prisma.paymentEvent.update({
+        where: { id: paymentEvent.id },
+        data: {
+          status: PaymentStatus.failed,
+          failureReason: paymentData.error_description || 'Payment failed',
+        },
+      });
+    }
+  }
+
+  private static async handleOrderPaid(orderData: any) {
+    const paymentEvent = await prisma.paymentEvent.findFirst({
+      where: { razorpayOrderId: orderData.id },
+    });
+
+    if (paymentEvent) {
+      console.log(`Order ${orderData.id} paid successfully`);
+    }
+  }
+
+  static async getPaymentHistory(userId: string, page: number = 1, limit: number = 25) {
+    const offset = (page - 1) * limit;
+
+    const [payments, total] = await Promise.all([
+      prisma.paymentEvent.findMany({
+        where: { userId },
+        include: {
+          pet: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          qrCode: {
+            select: {
+              id: true,
+              qrCodeString: true,
+              status: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit,
+      }),
+      prisma.paymentEvent.count({ where: { userId } }),
+    ]);
+
+    const meta = {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page < Math.ceil(total / limit),
+      hasPrev: page > 1,
+    };
+
+    return { payments, meta };
+  }
+
+  static async initiateRefund(paymentEventId: string, refundAmount: number, reason: string, initiatedBy: string) {
+    const paymentEvent = await prisma.paymentEvent.findUnique({
+      where: { id: paymentEventId },
+    });
+
+    if (!paymentEvent) {
+      throw new AppError('Payment event not found', 404);
+    }
+
+    if (paymentEvent.status !== PaymentStatus.success) {
+      throw new AppError('Can only refund successful payments', 400);
+    }
+
+    if (!paymentEvent.razorpayPaymentId) {
+      throw new AppError('Payment ID not found', 400);
+    }
+
+    // Create refund in Razorpay
+    const refund = await this.razorpay.payments.refund(paymentEvent.razorpayPaymentId, {
+      amount: Math.round(refundAmount * 100),
+      notes: {
+        reason,
+        initiated_by: initiatedBy,
+      },
+    });
+
+    // Create refund record
+    const refundRecord = await prisma.refund.create({
+      data: {
+        paymentEventId,
+        razorpayRefundId: refund.id,
+        refundAmount,
+        reason,
+        initiatedBy,
+        status: 'initiated',
+      },
+    });
+
+    return refundRecord;
+  }
+}
