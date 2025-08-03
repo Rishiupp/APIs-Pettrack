@@ -4,8 +4,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Production build
-dist/
 
 # Environment variables
 .env
@@ -70,7 +68,6 @@ jspm_packages/
 
 # Nuxt.js build / generate output
 .nuxt
-dist
 
 # Gatsby files
 .cache/
@@ -125,5 +122,3 @@ coverage/
 # package-lock.json
 # yarn.lock
 
-# Build artifacts
-build/
