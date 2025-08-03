@@ -12,7 +12,7 @@ exports.AdminController = AdminController;
 _a = AdminController;
 AdminController.getDashboardOverview = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const overview = await admin_service_1.AdminService.getDashboardOverview();
-    response_1.ResponseHandler.success(res, overview);
+    return response_1.ResponseHandler.success(res, overview);
 });
 AdminController.getPetAnalytics = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { period = '30d', groupBy = 'day' } = req.query;
@@ -41,7 +41,7 @@ AdminController.getPetAnalytics = (0, error_handling_1.asyncHandler)(async (req,
         groupBy: groupBy,
         metric: 'registrations',
     });
-    response_1.ResponseHandler.success(res, analytics);
+    return response_1.ResponseHandler.success(res, analytics);
 });
 AdminController.getQRAnalytics = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { period = '30d', groupBy = 'day' } = req.query;
@@ -70,7 +70,7 @@ AdminController.getQRAnalytics = (0, error_handling_1.asyncHandler)(async (req, 
         groupBy: groupBy,
         metric: 'scans',
     });
-    response_1.ResponseHandler.success(res, analytics);
+    return response_1.ResponseHandler.success(res, analytics);
 });
 AdminController.getRevenueAnalytics = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { period = '30d', groupBy = 'day' } = req.query;
@@ -99,7 +99,7 @@ AdminController.getRevenueAnalytics = (0, error_handling_1.asyncHandler)(async (
         groupBy: groupBy,
         metric: 'revenue',
     });
-    response_1.ResponseHandler.success(res, analytics);
+    return response_1.ResponseHandler.success(res, analytics);
 });
 AdminController.getUserAnalytics = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { period = '30d', groupBy = 'day' } = req.query;
@@ -128,7 +128,7 @@ AdminController.getUserAnalytics = (0, error_handling_1.asyncHandler)(async (req
         groupBy: groupBy,
         metric: 'users',
     });
-    response_1.ResponseHandler.success(res, analytics);
+    return response_1.ResponseHandler.success(res, analytics);
 });
 AdminController.createQRCodePool = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { poolName, totalCapacity } = req.body;
@@ -144,7 +144,7 @@ AdminController.createQRCodePool = (0, error_handling_1.asyncHandler)(async (req
         return response_1.ResponseHandler.validationError(res, errors);
     }
     const pool = await admin_service_1.AdminService.createQRCodePool(validation_1.ValidationUtil.sanitizeString(poolName), totalCapacity);
-    response_1.ResponseHandler.created(res, pool, 'QR code pool created successfully');
+    return response_1.ResponseHandler.created(res, pool, 'QR code pool created successfully');
 });
 AdminController.generateQRCodes = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { poolId, quantity } = req.body;
@@ -160,7 +160,7 @@ AdminController.generateQRCodes = (0, error_handling_1.asyncHandler)(async (req,
         return response_1.ResponseHandler.validationError(res, errors);
     }
     const result = await admin_service_1.AdminService.generateQRCodes(poolId, quantity);
-    response_1.ResponseHandler.success(res, result, 'QR codes generated successfully');
+    return response_1.ResponseHandler.success(res, result, 'QR codes generated successfully');
 });
 AdminController.getQRCodePools = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { page, limit } = req.query;
@@ -169,7 +169,7 @@ AdminController.getQRCodePools = (0, error_handling_1.asyncHandler)(async (req, 
         return response_1.ResponseHandler.validationError(res, errors);
     }
     const result = await admin_service_1.AdminService.getQRCodePools(validPage, validLimit);
-    response_1.ResponseHandler.success(res, result.pools, undefined, 200, result.meta);
+    return response_1.ResponseHandler.success(res, result.pools, undefined, 200, result.meta);
 });
 AdminController.getAllUsers = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { page, limit, role, status } = req.query;
@@ -203,25 +203,31 @@ AdminController.getAllUsers = (0, error_handling_1.asyncHandler)(async (req, res
     if (status)
         filters.status = status;
     const result = await admin_service_1.AdminService.getAllUsers(validPage, validLimit, filters);
-    response_1.ResponseHandler.success(res, result.users, undefined, 200, result.meta);
+    return response_1.ResponseHandler.success(res, result.users, undefined, 200, result.meta);
 });
 AdminController.suspendUser = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { userId } = req.params;
     const { reason, notifyUser = true } = req.body;
+    if (!userId) {
+        return response_1.ResponseHandler.error(res, 'User ID is required', 400);
+    }
     const errors = validation_1.ValidationUtil.validateRequired({ reason });
     if (errors.length > 0) {
         return response_1.ResponseHandler.validationError(res, errors);
     }
     const result = await admin_service_1.AdminService.suspendUser(userId, validation_1.ValidationUtil.sanitizeString(reason), notifyUser);
-    response_1.ResponseHandler.success(res, result, 'User suspended successfully');
+    return response_1.ResponseHandler.success(res, result, 'User suspended successfully');
 });
 AdminController.reactivateUser = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { userId } = req.params;
+    if (!userId) {
+        return response_1.ResponseHandler.error(res, 'User ID is required', 400);
+    }
     const result = await admin_service_1.AdminService.reactivateUser(userId);
-    response_1.ResponseHandler.success(res, result, 'User reactivated successfully');
+    return response_1.ResponseHandler.success(res, result, 'User reactivated successfully');
 });
-AdminController.getSystemStats = (0, error_handling_1.asyncHandler)(async (req, res) => {
+AdminController.getSystemStats = (0, error_handling_1.asyncHandler)(async (_req, res) => {
     const stats = await admin_service_1.AdminService.getSystemStats();
-    response_1.ResponseHandler.success(res, stats);
+    return response_1.ResponseHandler.success(res, stats);
 });
 //# sourceMappingURL=admin.controller.js.map

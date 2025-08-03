@@ -34,7 +34,9 @@ export declare const config: {
         pass: string;
     };
     sms: {
+        accountSid: string | undefined;
         apiKey: string | undefined;
+        apiSecret: string | undefined;
         senderId: string;
     };
     upload: {
@@ -52,6 +54,10 @@ export declare const config: {
         baseUrl: string;
         size: number;
         errorCorrection: string;
+    };
+    oauth: {
+        googleClientId: string;
+        appleClientId: string;
     };
     security: {
         bcryptRounds: number;

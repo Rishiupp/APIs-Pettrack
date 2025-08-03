@@ -9,6 +9,7 @@ const client_1 = require("@prisma/client");
 const database_1 = __importDefault(require("../../config/database"));
 const crypto_1 = require("../../utils/crypto");
 const types_1 = require("../../types");
+const sms_service_1 = require("../sms/sms.service");
 const config_1 = require("../../config");
 class QRService {
     static async generateQRCodes(poolId, quantity) {
@@ -226,8 +227,17 @@ class QRService {
         return client_1.DeviceType.desktop;
     }
     static async notifyPetOwner(pet, _scanEvent, scannerContact) {
-        console.log(`Notifying pet owner: ${pet.owner.user.firstName} ${pet.owner.user.lastName}`);
-        console.log(`Pet ${pet.name} was scanned by ${scannerContact.name || 'someone'}`);
+        try {
+            if (pet.owner?.user?.phone) {
+                const scannerInfo = scannerContact?.name || scannerContact?.phone || 'someone nearby';
+                await sms_service_1.SMSService.sendNotification(pet.owner.user.phone, pet.name, scannerInfo);
+            }
+            console.log(`Notification sent to pet owner: ${pet.owner.user.firstName} ${pet.owner.user.lastName}`);
+            console.log(`Pet ${pet.name} was scanned by ${scannerContact.name || 'someone'}`);
+        }
+        catch (error) {
+            console.error('Failed to notify pet owner:', error);
+        }
     }
     static async getAvailableQRCodes(limit = 10) {
         const qrCodes = await database_1.default.qRCode.findMany({

@@ -9,7 +9,7 @@ export declare class PetsService {
         } | null;
         owner: {
             user: {
-                email: string;
+                email: string | null;
                 phone: string | null;
                 firstName: string;
                 lastName: string;
@@ -148,7 +148,7 @@ export declare class PetsService {
         } | null;
         owner: {
             user: {
-                email: string;
+                email: string | null;
                 phone: string | null;
                 id: string;
                 firstName: string;
@@ -258,7 +258,7 @@ export declare class PetsService {
         } | null;
         owner: {
             user: {
-                email: string;
+                email: string | null;
                 phone: string | null;
                 firstName: string;
                 lastName: string;

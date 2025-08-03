@@ -15,6 +15,10 @@ const authenticate = async (req, res, next) => {
             return;
         }
         const token = authHeader.substring(7);
+        if (jwt_1.JWTUtil.isTokenExpired(token)) {
+            response_1.ResponseHandler.unauthorized(res, 'Token has expired');
+            return;
+        }
         const payload = jwt_1.JWTUtil.verifyAccessToken(token);
         if (!payload) {
             response_1.ResponseHandler.unauthorized(res, 'Invalid or expired token');
@@ -40,6 +44,7 @@ const authenticate = async (req, res, next) => {
         next();
     }
     catch (error) {
+        console.error('Authentication middleware error:', error);
         response_1.ResponseHandler.unauthorized(res, 'Authentication failed');
     }
 };

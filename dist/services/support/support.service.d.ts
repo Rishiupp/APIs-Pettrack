@@ -3,7 +3,7 @@ import { CreateTicketRequest, TicketMessage } from '../../types';
 export declare class SupportService {
     static createTicket(userId: string, ticketData: CreateTicketRequest): Promise<{
         user: {
-            email: string;
+            email: string | null;
             phone: string | null;
             firstName: string;
             lastName: string;
@@ -70,7 +70,7 @@ export declare class SupportService {
     }>;
     static getTicketById(ticketId: string, userId: string): Promise<{
         user: {
-            email: string;
+            email: string | null;
             phone: string | null;
             firstName: string;
             lastName: string;
@@ -92,7 +92,7 @@ export declare class SupportService {
             } | null;
         } | null;
         assignedToUser: {
-            email: string;
+            email: string | null;
             firstName: string;
             lastName: string;
         } | null;
@@ -162,7 +162,7 @@ export declare class SupportService {
     }>;
     static assignTicket(ticketId: string, assignedTo: string, assignedBy: string): Promise<{
         assignedToUser: {
-            email: string;
+            email: string | null;
             firstName: string;
             lastName: string;
         } | null;
@@ -198,7 +198,7 @@ export declare class SupportService {
     }): Promise<{
         tickets: ({
             user: {
-                email: string;
+                email: string | null;
                 firstName: string;
                 lastName: string;
             } | null;

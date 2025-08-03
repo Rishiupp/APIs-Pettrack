@@ -9,6 +9,7 @@ const client_1 = require("@prisma/client");
 const database_1 = __importDefault(require("../../config/database"));
 const config_1 = require("../../config");
 const types_1 = require("../../types");
+const sms_service_1 = require("../sms/sms.service");
 if (!firebase_admin_1.default.apps.length && config_1.config.firebase.privateKey && config_1.config.firebase.projectId && config_1.config.firebase.clientEmail) {
     try {
         firebase_admin_1.default.initializeApp({
@@ -169,6 +170,10 @@ class NotificationService {
     }
     static async sendNotificationThroughChannels(userId, notification) {
         const deliveryStatus = {};
+        const user = await database_1.default.user.findUnique({
+            where: { id: userId },
+            select: { phone: true },
+        });
         for (const channel of notification.channels) {
             try {
                 switch (channel) {
@@ -188,7 +193,17 @@ class NotificationService {
                         deliveryStatus.email = { success: false, message: 'Email not implemented' };
                         break;
                     case 'sms':
-                        deliveryStatus.sms = { success: false, message: 'SMS not implemented' };
+                        if (user?.phone) {
+                            const smsContent = `${notification.title}: ${notification.message}`;
+                            const success = await sms_service_1.SMSService.sendSMS(user.phone, smsContent);
+                            deliveryStatus.sms = {
+                                success,
+                                message: success ? 'SMS sent successfully' : 'SMS failed to send'
+                            };
+                        }
+                        else {
+                            deliveryStatus.sms = { success: false, message: 'No phone number available' };
+                        }
                         break;
                 }
             }

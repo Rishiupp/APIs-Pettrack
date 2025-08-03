@@ -35,9 +35,14 @@ class JWTUtil {
                 issuer: config_1.config.app.name,
                 audience: config_1.config.app.name,
             });
+            if (decoded.type === 'refresh') {
+                console.error('Refresh token used as access token');
+                return null;
+            }
             return decoded;
         }
         catch (error) {
+            console.error('JWT verification failed:', error instanceof Error ? error.message : String(error));
             return null;
         }
     }
@@ -48,11 +53,13 @@ class JWTUtil {
                 audience: config_1.config.app.name,
             });
             if (decoded.type !== 'refresh') {
+                console.error('Non-refresh token used as refresh token');
                 return null;
             }
             return decoded;
         }
         catch (error) {
+            console.error('Refresh token verification failed:', error instanceof Error ? error.message : String(error));
             return null;
         }
     }

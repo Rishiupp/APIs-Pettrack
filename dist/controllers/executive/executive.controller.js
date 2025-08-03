@@ -60,7 +60,7 @@ ExecutiveController.registerPet = (0, error_handling_1.asyncHandler)(async (req,
         return response_1.ResponseHandler.validationError(res, allErrors);
     }
     const result = await executive_service_1.ExecutiveService.registerPetWithOwner(executiveId, registrationData);
-    response_1.ResponseHandler.created(res, result, 'Pet registered successfully');
+    return response_1.ResponseHandler.created(res, result, 'Pet registered successfully');
 });
 ExecutiveController.getRegistrationHistory = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const executiveId = req.user.id;
@@ -77,17 +77,17 @@ ExecutiveController.getRegistrationHistory = (0, error_handling_1.asyncHandler)(
             }]);
     }
     const result = await executive_service_1.ExecutiveService.getRegistrationHistory(executiveId, validPage, validLimit, from);
-    response_1.ResponseHandler.success(res, result.registrations, undefined, 200, result.meta);
+    return response_1.ResponseHandler.success(res, result.registrations, undefined, 200, result.meta);
 });
 ExecutiveController.getExecutiveStats = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const executiveId = req.user.id;
     const stats = await executive_service_1.ExecutiveService.getExecutiveStats(executiveId);
-    response_1.ResponseHandler.success(res, stats);
+    return response_1.ResponseHandler.success(res, stats);
 });
 ExecutiveController.getProfile = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const executiveId = req.user.id;
     const profile = await executive_service_1.ExecutiveService.getExecutiveProfile(executiveId);
-    response_1.ResponseHandler.success(res, profile);
+    return response_1.ResponseHandler.success(res, profile);
 });
 ExecutiveController.updateProfile = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const executiveId = req.user.id;
@@ -97,7 +97,7 @@ ExecutiveController.updateProfile = (0, error_handling_1.asyncHandler)(async (re
         updateData.territory = validation_1.ValidationUtil.sanitizeString(territory);
     }
     const profile = await executive_service_1.ExecutiveService.updateExecutiveProfile(executiveId, updateData);
-    response_1.ResponseHandler.success(res, profile, 'Profile updated successfully');
+    return response_1.ResponseHandler.success(res, profile, 'Profile updated successfully');
 });
 ExecutiveController.getDailyReport = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const executiveId = req.user.id;
@@ -116,7 +116,7 @@ ExecutiveController.getDailyReport = (0, error_handling_1.asyncHandler)(async (r
             }]);
     }
     const report = await executive_service_1.ExecutiveService.getDailyRegistrationReport(executiveId, date);
-    response_1.ResponseHandler.success(res, report);
+    return response_1.ResponseHandler.success(res, report);
 });
 ExecutiveController.getAllExecutives = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { page, limit } = req.query;
@@ -125,7 +125,7 @@ ExecutiveController.getAllExecutives = (0, error_handling_1.asyncHandler)(async 
         return response_1.ResponseHandler.validationError(res, errors);
     }
     const result = await executive_service_1.ExecutiveService.getAllExecutives(validPage, validLimit);
-    response_1.ResponseHandler.success(res, result.executives, undefined, 200, result.meta);
+    return response_1.ResponseHandler.success(res, result.executives, undefined, 200, result.meta);
 });
 ExecutiveController.createExecutive = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { email, phone, firstName, lastName, employeeId, territory } = req.body;
@@ -153,11 +153,14 @@ ExecutiveController.createExecutive = (0, error_handling_1.asyncHandler)(async (
         employeeId: validation_1.ValidationUtil.sanitizeString(employeeId),
         territory: territory ? validation_1.ValidationUtil.sanitizeString(territory) : undefined,
     });
-    response_1.ResponseHandler.created(res, result, 'Executive created successfully');
+    return response_1.ResponseHandler.created(res, result, 'Executive created successfully');
 });
 ExecutiveController.deactivateExecutive = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { executiveId } = req.params;
+    if (!executiveId) {
+        return response_1.ResponseHandler.error(res, 'Executive ID is required', 400);
+    }
     const result = await executive_service_1.ExecutiveService.deactivateExecutive(executiveId);
-    response_1.ResponseHandler.success(res, result, 'Executive deactivated successfully');
+    return response_1.ResponseHandler.success(res, result, 'Executive deactivated successfully');
 });
 //# sourceMappingURL=executive.controller.js.map

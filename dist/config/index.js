@@ -42,7 +42,9 @@ exports.config = {
         pass: process.env.SMTP_PASS,
     },
     sms: {
+        accountSid: process.env.TWILIO_ACCOUNT_SID,
         apiKey: process.env.SMS_API_KEY,
+        apiSecret: process.env.SMS_API_SECRET,
         senderId: process.env.SMS_SENDER_ID || 'PETTRCK',
     },
     upload: {
@@ -60,6 +62,10 @@ exports.config = {
         baseUrl: process.env.QR_CODE_BASE_URL || 'https://your-domain.com/scan',
         size: parseInt(process.env.QR_CODE_SIZE || '300'),
         errorCorrection: process.env.QR_CODE_ERROR_CORRECTION || 'M',
+    },
+    oauth: {
+        googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+        appleClientId: process.env.APPLE_CLIENT_ID || '',
     },
     security: {
         bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || '12'),
@@ -80,6 +86,9 @@ const requiredEnvVars = [
     'RAZORPAY_KEY_SECRET',
     'SMTP_USER',
     'SMTP_PASS',
+    'TWILIO_ACCOUNT_SID',
+    'SMS_API_KEY',
+    'SMS_API_SECRET',
 ];
 for (const envVar of requiredEnvVars) {
     if (!process.env[envVar]) {

@@ -10,16 +10,24 @@ class PetsService {
     static async createPet(ownerId, petData, registeredBy) {
         const { name, speciesId, breedId, secondaryBreedId, gender, birthDate, color, weight, height, distinctiveMarks, isSpayedNeutered, microchipId, specialNeeds, behavioralNotes, vaccinations = [], } = petData;
         if (speciesId) {
+            const speciesIdInt = parseInt(speciesId.toString(), 10);
+            if (isNaN(speciesIdInt)) {
+                throw new types_1.AppError('Invalid species ID format', 400);
+            }
             const species = await database_1.default.petSpecies.findUnique({
-                where: { id: speciesId },
+                where: { id: speciesIdInt },
             });
             if (!species) {
                 throw new types_1.AppError('Invalid species ID', 400);
             }
         }
         if (breedId) {
+            const breedIdInt = parseInt(breedId.toString(), 10);
+            if (isNaN(breedIdInt)) {
+                throw new types_1.AppError('Invalid breed ID format', 400);
+            }
             const breed = await database_1.default.petBreed.findUnique({
-                where: { id: breedId },
+                where: { id: breedIdInt },
             });
             if (!breed) {
                 throw new types_1.AppError('Invalid breed ID', 400);
@@ -38,9 +46,9 @@ class PetsService {
                 ownerId,
                 registeredBy,
                 name,
-                speciesId,
-                breedId,
-                secondaryBreedId,
+                speciesId: speciesId ? parseInt(speciesId.toString(), 10) : null,
+                breedId: breedId ? parseInt(breedId.toString(), 10) : null,
+                secondaryBreedId: secondaryBreedId ? parseInt(secondaryBreedId.toString(), 10) : null,
                 gender: gender,
                 birthDate: birthDate ? new Date(birthDate) : null,
                 color,
@@ -205,9 +213,9 @@ class PetsService {
             where: { id: petId },
             data: {
                 ...(updateData.name && { name: updateData.name }),
-                ...(updateData.speciesId && { speciesId: updateData.speciesId }),
-                ...(updateData.breedId && { breedId: updateData.breedId }),
-                ...(updateData.secondaryBreedId && { secondaryBreedId: updateData.secondaryBreedId }),
+                ...(updateData.speciesId && { speciesId: parseInt(updateData.speciesId.toString(), 10) }),
+                ...(updateData.breedId && { breedId: parseInt(updateData.breedId.toString(), 10) }),
+                ...(updateData.secondaryBreedId && { secondaryBreedId: parseInt(updateData.secondaryBreedId.toString(), 10) }),
                 ...(updateData.gender && { gender: updateData.gender }),
                 ...(updateData.birthDate && { birthDate: new Date(updateData.birthDate) }),
                 ...(updateData.color && { color: updateData.color }),
@@ -263,16 +271,23 @@ class PetsService {
     }
     static async addVaccinationRecords(petId, vaccinations) {
         const records = await Promise.all(vaccinations.map(async (vaccination) => {
-            const vaccineType = await database_1.default.vaccineType.findUnique({
-                where: { id: vaccination.vaccineTypeId },
+            let vaccineType = await database_1.default.vaccineType.findFirst({
+                where: { vaccineName: vaccination.vaccineName },
             });
             if (!vaccineType) {
-                throw new types_1.AppError(`Invalid vaccine type ID: ${vaccination.vaccineTypeId}`, 400);
+                vaccineType = await database_1.default.vaccineType.create({
+                    data: {
+                        vaccineName: vaccination.vaccineName,
+                        speciesApplicability: [],
+                        durationMonths: 12,
+                        isRequiredByLaw: false,
+                    },
+                });
             }
             return database_1.default.vaccinationRecord.create({
                 data: {
                     petId,
-                    vaccineTypeId: vaccination.vaccineTypeId,
+                    vaccineTypeId: vaccineType.id,
                     administeredDate: new Date(vaccination.administeredDate),
                     expirationDate: vaccination.expirationDate ? new Date(vaccination.expirationDate) : null,
                     batchNumber: vaccination.batchNumber,

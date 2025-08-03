@@ -76,7 +76,7 @@ export declare class AdminService {
                 employeeId: string;
                 territory: string | null;
             } | null;
-            email: string;
+            email: string | null;
             phone: string | null;
             id: string;
             firstName: string;
@@ -104,7 +104,7 @@ export declare class AdminService {
     }>;
     static suspendUser(userId: string, reason: string, notifyUser?: boolean): Promise<{
         user: {
-            email: string;
+            email: string | null;
             phone: string | null;
             id: string;
             firstName: string;
@@ -116,12 +116,16 @@ export declare class AdminService {
             lastLogin: Date | null;
             createdAt: Date;
             updatedAt: Date;
+            googleId: string | null;
+            appleId: string | null;
+            profilePicture: string | null;
+            authProvider: import(".prisma/client").$Enums.AuthProvider | null;
         };
         message: string;
     }>;
     static reactivateUser(userId: string): Promise<{
         user: {
-            email: string;
+            email: string | null;
             phone: string | null;
             id: string;
             firstName: string;
@@ -133,6 +137,10 @@ export declare class AdminService {
             lastLogin: Date | null;
             createdAt: Date;
             updatedAt: Date;
+            googleId: string | null;
+            appleId: string | null;
+            profilePicture: string | null;
+            authProvider: import(".prisma/client").$Enums.AuthProvider | null;
         };
         message: string;
     }>;

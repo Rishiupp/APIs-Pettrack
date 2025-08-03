@@ -56,14 +56,16 @@ export class AuthController {
     console.log('RequestOTP identifier type:', typeof identifier);
 
     if (!identifier || identifier.trim() === '') {
+      // Log debug information separately
+      console.log('RequestOTP validation failed - debug info:', {
+        received: identifier,
+        type: typeof identifier,
+        body: req.body
+      });
+      
       return ResponseHandler.validationError(res, [{
         field: 'identifier',
-        message: 'Phone number or email is required',
-        debug: {
-          received: identifier,
-          type: typeof identifier,
-          body: req.body
-        }
+        message: 'Phone number or email is required'
       }]);
     }
 

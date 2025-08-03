@@ -13,7 +13,7 @@ export declare class QRService {
         pet: ({
             owner: {
                 user: {
-                    email: string;
+                    email: string | null;
                     phone: string | null;
                     firstName: string;
                     lastName: string;
@@ -91,7 +91,7 @@ export declare class QRService {
             } | null;
             owner: {
                 user: {
-                    email: string;
+                    email: string | null;
                     phone: string | null;
                     firstName: string;
                     lastName: string;

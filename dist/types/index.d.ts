@@ -141,7 +141,7 @@ export interface PetRegistration {
     vaccinations?: VaccinationInput[];
 }
 export interface VaccinationInput {
-    vaccineTypeId: number;
+    vaccineName: string;
     administeredDate: string;
     expirationDate?: string;
     batchNumber?: string;

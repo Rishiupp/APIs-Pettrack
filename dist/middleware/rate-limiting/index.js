@@ -64,9 +64,9 @@ exports.otpRateLimit = (0, express_rate_limit_1.default)({
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: (req) => {
-        const phone = req.body?.phone;
-        if (phone) {
-            return `otp_${phone}`;
+        const identifier = req.body?.identifier || req.body?.phone;
+        if (identifier) {
+            return `otp_${identifier}`;
         }
         return `otp_${(0, express_rate_limit_1.ipKeyGenerator)(req.ip || '127.0.0.1')}`;
     },

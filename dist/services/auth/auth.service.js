@@ -10,6 +10,7 @@ const crypto_1 = require("../../utils/crypto");
 const jwt_1 = require("../../utils/jwt");
 const types_1 = require("../../types");
 const config_1 = require("../../config");
+const sms_service_1 = require("../sms/sms.service");
 class AuthService {
     static async requestOTP(phone, purpose) {
         const sanitizedPhone = phone.replace(/\s+/g, '');
@@ -60,7 +61,13 @@ class AuthService {
                 expiresAt,
             },
         });
-        console.log(`OTP for ${sanitizedPhone}: ${otpCode}`);
+        try {
+            await sms_service_1.SMSService.sendOTP(sanitizedPhone, otpCode);
+        }
+        catch (error) {
+            console.error('Failed to send OTP SMS:', error);
+            console.log(`OTP for ${sanitizedPhone}: ${otpCode}`);
+        }
         return {
             message: 'OTP sent successfully',
             expiresIn: config_1.config.otp.expiryTime,
@@ -131,58 +138,121 @@ class AuthService {
     static async register(userData) {
         const { phone, email, firstName, lastName, otpCode } = userData;
         const sanitizedPhone = phone.replace(/\s+/g, '');
-        const otpHash = crypto_1.CryptoUtil.hashOTP(otpCode);
-        const existingUser = await database_1.default.user.findFirst({
+        const existingActiveUser = await database_1.default.user.findFirst({
             where: {
                 OR: [
                     { phone: sanitizedPhone },
                     { email: email.toLowerCase() },
                 ],
+                isActive: true,
             },
         });
-        if (existingUser) {
+        if (existingActiveUser) {
             throw new types_1.AppError('User already exists with this phone or email', 409);
         }
-        const user = await database_1.default.user.create({
-            data: {
-                phone: sanitizedPhone,
-                email: email.toLowerCase(),
-                firstName,
-                lastName,
-                role: client_1.UserRole.pet_owner,
-                phoneVerified: true,
-            },
-        });
-        await database_1.default.petOwner.create({
-            data: {
-                userId: user.id,
-            },
-        });
-        const permissions = (0, jwt_1.getRolePermissions)(user.role);
-        const accessToken = jwt_1.JWTUtil.generateAccessToken(user.id, user.role, permissions);
-        const refreshToken = jwt_1.JWTUtil.generateRefreshToken(user.id);
-        const refreshTokenHash = crypto_1.CryptoUtil.hashOTP(refreshToken);
-        await database_1.default.userSession.create({
-            data: {
-                userId: user.id,
-                refreshTokenHash,
-                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            },
-        });
-        return {
-            accessToken,
-            refreshToken,
-            user: {
-                id: user.id,
-                email: user.email,
-                phone: user.phone,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                role: user.role,
-                emailVerified: user.emailVerified,
-                phoneVerified: user.phoneVerified,
-            },
-        };
+        try {
+            await database_1.default.user.deleteMany({
+                where: {
+                    phone: sanitizedPhone,
+                    isActive: false,
+                    createdAt: {
+                        lt: new Date(Date.now() - 10 * 60 * 1000),
+                    },
+                },
+            });
+            let user = await database_1.default.user.findFirst({
+                where: {
+                    phone: sanitizedPhone,
+                    isActive: false,
+                },
+                orderBy: {
+                    createdAt: 'desc',
+                },
+            });
+            console.log(`Debug: Looking for temp user with phone: ${sanitizedPhone}`);
+            console.log(`Debug: Found temp user:`, user ? { id: user.id, phone: user.phone, isActive: user.isActive } : 'null');
+            if (!user) {
+                const anyUser = await database_1.default.user.findFirst({
+                    where: { phone: sanitizedPhone },
+                });
+                console.log(`Debug: Any user with this phone:`, anyUser ? { id: anyUser.id, phone: anyUser.phone, isActive: anyUser.isActive } : 'null');
+                throw new types_1.AppError('Please request OTP first before registering', 400);
+            }
+            const otpHash = crypto_1.CryptoUtil.hashOTP(otpCode);
+            console.log(`Debug: Verifying OTP for user ${user.id}`);
+            console.log(`Debug: Looking for OTP with purpose: registration`);
+            const validOTP = await database_1.default.oTPCode.findFirst({
+                where: {
+                    userId: user.id,
+                    codeHash: otpHash,
+                    purpose: client_1.OTPPurpose.registration,
+                    isUsed: false,
+                    expiresAt: { gt: new Date() },
+                },
+            });
+            console.log(`Debug: Found valid OTP:`, validOTP ? { id: validOTP.id, isUsed: validOTP.isUsed, expiresAt: validOTP.expiresAt } : 'null');
+            if (!validOTP) {
+                const anyOTP = await database_1.default.oTPCode.findFirst({
+                    where: { userId: user.id },
+                    orderBy: { createdAt: 'desc' },
+                });
+                console.log(`Debug: Any OTP for this user:`, anyOTP ? {
+                    id: anyOTP.id,
+                    purpose: anyOTP.purpose,
+                    isUsed: anyOTP.isUsed,
+                    expiresAt: anyOTP.expiresAt,
+                    now: new Date()
+                } : 'null');
+                throw new types_1.AppError('Invalid or expired OTP. Please request a new OTP first.', 400);
+            }
+            await database_1.default.oTPCode.update({
+                where: { id: validOTP.id },
+                data: { isUsed: true },
+            });
+            user = await database_1.default.user.update({
+                where: { id: user.id },
+                data: {
+                    email: email.toLowerCase(),
+                    firstName,
+                    lastName,
+                    phoneVerified: true,
+                    isActive: true,
+                },
+            });
+            await database_1.default.petOwner.create({
+                data: {
+                    userId: user.id,
+                },
+            });
+            const permissions = (0, jwt_1.getRolePermissions)(user.role);
+            const accessToken = jwt_1.JWTUtil.generateAccessToken(user.id, user.role, permissions);
+            const refreshToken = jwt_1.JWTUtil.generateRefreshToken(user.id);
+            const refreshTokenHash = crypto_1.CryptoUtil.hashOTP(refreshToken);
+            await database_1.default.userSession.create({
+                data: {
+                    userId: user.id,
+                    refreshTokenHash,
+                    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                },
+            });
+            return {
+                accessToken,
+                refreshToken,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    phone: user.phone,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    role: user.role,
+                    emailVerified: user.emailVerified,
+                    phoneVerified: user.phoneVerified,
+                },
+            };
+        }
+        catch (error) {
+            throw error;
+        }
     }
     static async refreshToken(refreshToken) {
         const decoded = jwt_1.JWTUtil.verifyRefreshToken(refreshToken);

@@ -2,7 +2,7 @@ import { ExecutiveRegistration } from '../../types';
 export declare class ExecutiveService {
     static registerPetWithOwner(executiveId: string, registrationData: ExecutiveRegistration): Promise<{
         user: {
-            email: string;
+            email: string | null;
             phone: string | null;
             id: string;
             firstName: string;
@@ -14,6 +14,10 @@ export declare class ExecutiveService {
             lastLogin: Date | null;
             createdAt: Date;
             updatedAt: Date;
+            googleId: string | null;
+            appleId: string | null;
+            profilePicture: string | null;
+            authProvider: import(".prisma/client").$Enums.AuthProvider | null;
         };
         petOwner: {
             id: string;
@@ -107,7 +111,7 @@ export declare class ExecutiveService {
             } | null;
             owner: {
                 user: {
-                    email: string;
+                    email: string | null;
                     phone: string | null;
                     firstName: string;
                     lastName: string;
@@ -187,7 +191,7 @@ export declare class ExecutiveService {
         territory?: string;
     }): Promise<{
         user: {
-            email: string;
+            email: string | null;
             phone: string | null;
             firstName: string;
             lastName: string;
@@ -202,7 +206,7 @@ export declare class ExecutiveService {
     }>;
     static getExecutiveProfile(executiveId: string): Promise<{
         user: {
-            email: string;
+            email: string | null;
             phone: string | null;
             id: string;
             firstName: string;
@@ -232,7 +236,7 @@ export declare class ExecutiveService {
             } | null;
             owner: {
                 user: {
-                    email: string;
+                    email: string | null;
                     phone: string | null;
                     firstName: string;
                     lastName: string;
@@ -292,7 +296,7 @@ export declare class ExecutiveService {
     static getAllExecutives(page?: number, limit?: number): Promise<{
         executives: ({
             user: {
-                email: string;
+                email: string | null;
                 phone: string | null;
                 firstName: string;
                 lastName: string;
@@ -325,7 +329,7 @@ export declare class ExecutiveService {
         territory?: string;
     }): Promise<{
         user: {
-            email: string;
+            email: string | null;
             phone: string | null;
             id: string;
             firstName: string;
@@ -337,6 +341,10 @@ export declare class ExecutiveService {
             lastLogin: Date | null;
             createdAt: Date;
             updatedAt: Date;
+            googleId: string | null;
+            appleId: string | null;
+            profilePicture: string | null;
+            authProvider: import(".prisma/client").$Enums.AuthProvider | null;
         };
         executive: {
             id: string;

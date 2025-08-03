@@ -9,7 +9,7 @@ export declare class AuthService {
         refreshToken: string;
         user: {
             id: string;
-            email: string;
+            email: string | null;
             phone: string | null;
             firstName: string;
             lastName: string;
@@ -29,7 +29,7 @@ export declare class AuthService {
         refreshToken: string;
         user: {
             id: string;
-            email: string;
+            email: string | null;
             phone: string | null;
             firstName: string;
             lastName: string;
@@ -42,7 +42,7 @@ export declare class AuthService {
         accessToken: string;
         user: {
             id: string;
-            email: string;
+            email: string | null;
             phone: string | null;
             firstName: string;
             lastName: string;
@@ -59,7 +59,7 @@ export declare class AuthService {
     }>;
     static getUserProfile(userId: string): Promise<{
         id: string;
-        email: string;
+        email: string | null;
         phone: string | null;
         firstName: string;
         lastName: string;

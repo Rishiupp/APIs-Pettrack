@@ -52,7 +52,7 @@ SupportController.createTicket = (0, error_handling_1.asyncHandler)(async (req, 
         priority,
         petId,
     });
-    response_1.ResponseHandler.created(res, ticket, 'Support ticket created successfully');
+    return response_1.ResponseHandler.created(res, ticket, 'Support ticket created successfully');
 });
 SupportController.getUserTickets = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const userId = req.user.id;
@@ -72,13 +72,16 @@ SupportController.getUserTickets = (0, error_handling_1.asyncHandler)(async (req
         }
     }
     const result = await support_service_1.SupportService.getUserTickets(userId, validPage, validLimit, status);
-    response_1.ResponseHandler.success(res, result.tickets, undefined, 200, result.meta);
+    return response_1.ResponseHandler.success(res, result.tickets, undefined, 200, result.meta);
 });
 SupportController.getTicketById = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { ticketId } = req.params;
     const userId = req.user.id;
+    if (!ticketId) {
+        return response_1.ResponseHandler.error(res, 'Ticket ID is required', 400);
+    }
     const ticket = await support_service_1.SupportService.getTicketById(ticketId, userId);
-    response_1.ResponseHandler.success(res, ticket);
+    return response_1.ResponseHandler.success(res, ticket);
 });
 SupportController.addMessage = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { ticketId } = req.params;
@@ -102,11 +105,14 @@ SupportController.addMessage = (0, error_handling_1.asyncHandler)(async (req, re
     if (errors.length > 0) {
         return response_1.ResponseHandler.validationError(res, errors);
     }
+    if (!ticketId) {
+        return response_1.ResponseHandler.error(res, 'Ticket ID is required', 400);
+    }
     const ticketMessage = await support_service_1.SupportService.addMessage(ticketId, userId, {
         message: validation_1.ValidationUtil.sanitizeString(message),
         attachments,
     });
-    response_1.ResponseHandler.created(res, ticketMessage, 'Message added successfully');
+    return response_1.ResponseHandler.created(res, ticketMessage, 'Message added successfully');
 });
 SupportController.updateTicketStatus = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { ticketId } = req.params;
@@ -126,8 +132,11 @@ SupportController.updateTicketStatus = (0, error_handling_1.asyncHandler)(async 
                 message: 'Resolution is required when marking ticket as resolved',
             }]);
     }
+    if (!ticketId) {
+        return response_1.ResponseHandler.error(res, 'Ticket ID is required', 400);
+    }
     const ticket = await support_service_1.SupportService.updateTicketStatus(ticketId, userId, status, resolution ? validation_1.ValidationUtil.sanitizeString(resolution) : undefined);
-    response_1.ResponseHandler.success(res, ticket, 'Ticket status updated successfully');
+    return response_1.ResponseHandler.success(res, ticket, 'Ticket status updated successfully');
 });
 SupportController.assignTicket = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { ticketId } = req.params;
@@ -137,13 +146,16 @@ SupportController.assignTicket = (0, error_handling_1.asyncHandler)(async (req, 
     if (errors.length > 0) {
         return response_1.ResponseHandler.validationError(res, errors);
     }
+    if (!ticketId) {
+        return response_1.ResponseHandler.error(res, 'Ticket ID is required', 400);
+    }
     const ticket = await support_service_1.SupportService.assignTicket(ticketId, assignedTo, userId);
-    response_1.ResponseHandler.success(res, ticket, 'Ticket assigned successfully');
+    return response_1.ResponseHandler.success(res, ticket, 'Ticket assigned successfully');
 });
 SupportController.getTicketStatistics = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const userId = req.user.role === 'pet_owner' ? req.user.id : undefined;
     const statistics = await support_service_1.SupportService.getTicketStatistics(userId);
-    response_1.ResponseHandler.success(res, statistics);
+    return response_1.ResponseHandler.success(res, statistics);
 });
 SupportController.getAllTickets = (0, error_handling_1.asyncHandler)(async (req, res) => {
     const { page, limit, status, category, priority, assignedTo } = req.query;
@@ -189,6 +201,6 @@ SupportController.getAllTickets = (0, error_handling_1.asyncHandler)(async (req,
         filters.assignedTo = assignedTo;
     }
     const result = await support_service_1.SupportService.getAllTickets(validPage, validLimit, filters);
-    response_1.ResponseHandler.success(res, result.tickets, undefined, 200, result.meta);
+    return response_1.ResponseHandler.success(res, result.tickets, undefined, 200, result.meta);
 });
 //# sourceMappingURL=support.controller.js.map
