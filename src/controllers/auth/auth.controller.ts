@@ -8,6 +8,10 @@ import { asyncHandler } from '../../middleware/error-handling';
 
 export class AuthController {
   static register = asyncHandler(async (req: Request, res: Response) => {
+    // Debug logging for production environment
+    console.log('Request body received:', JSON.stringify(req.body, null, 2));
+    console.log('Content-Type:', req.headers['content-type']);
+    
     const { phone, email, firstName, lastName, otpCode } = req.body;
 
     // Validate input
@@ -45,11 +49,21 @@ export class AuthController {
 
   static requestOTP = asyncHandler(async (req: Request, res: Response) => {
     const { identifier, purpose = 'login', deliveryMethod } = req.body;
+    
+    // Debug logging for production environment
+    console.log('RequestOTP body received:', JSON.stringify(req.body, null, 2));
+    console.log('RequestOTP identifier value:', identifier);
+    console.log('RequestOTP identifier type:', typeof identifier);
 
-    if (!identifier) {
+    if (!identifier || identifier.trim() === '') {
       return ResponseHandler.validationError(res, [{
         field: 'identifier',
         message: 'Phone number or email is required',
+        debug: {
+          received: identifier,
+          type: typeof identifier,
+          body: req.body
+        }
       }]);
     }
 

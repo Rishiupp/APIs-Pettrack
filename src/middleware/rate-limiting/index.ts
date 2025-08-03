@@ -28,16 +28,16 @@ export const strictRateLimit = rateLimit({
 
 // OTP rate limiting
 export const otpRateLimit = rateLimit({
-  windowMs: 60 * 60 , // 1 hour
+  windowMs: 60 * 60 * 1000, // 1 hour
   max: 3, // limit each IP to 3 OTP requests per hour
   message: 'Too many OTP requests, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
-    // Use phone number as key if available, otherwise fall back to IP with IPv6 support
-    const phone = req.body?.phone;
-    if (phone) {
-      return `otp_${phone}`;
+    // Use identifier (phone/email) as key if available, otherwise fall back to IP
+    const identifier = req.body?.identifier || req.body?.phone;
+    if (identifier) {
+      return `otp_${identifier}`;
     }
     return `otp_${ipKeyGenerator(req.ip || '127.0.0.1')}`;
   },
