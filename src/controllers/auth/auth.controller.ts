@@ -12,6 +12,46 @@ export class AuthController {
     console.log('Request body received:', JSON.stringify(req.body, null, 2));
     console.log('Content-Type:', req.headers['content-type']);
     
+    const { phone, email, firstName, lastName } = req.body;
+
+    // Validate input
+    const errors = [];
+    
+    const phoneError = ValidationUtil.validatePhone(phone);
+    if (phoneError) errors.push(phoneError);
+    
+    const emailError = ValidationUtil.validateEmail(email);
+    if (emailError) errors.push(emailError);
+
+    const requiredErrors = ValidationUtil.validateRequired({
+      firstName,
+      lastName,
+    });
+    errors.push(...requiredErrors);
+
+    if (errors.length > 0) {
+      return ResponseHandler.validationError(res, errors);
+    }
+
+    // First step: Just request OTP for registration
+    const result = await EnhancedAuthService.requestOTP(
+      ValidationUtil.sanitizePhone(phone),
+      'registration'
+    );
+
+    // Store the registration data in session/temporary storage (you might want to use Redis for production)
+    // For now, we'll return success and expect frontend to call verify endpoint
+    return ResponseHandler.success(res, {
+      ...result,
+      message: 'Registration initiated. Please verify OTP to complete registration.',
+      phone: ValidationUtil.sanitizePhone(phone),
+      email: email.toLowerCase().trim(),
+      firstName: ValidationUtil.sanitizeString(firstName),
+      lastName: ValidationUtil.sanitizeString(lastName),
+    }, 'OTP sent for registration');
+  });
+
+  static completeRegistration = asyncHandler(async (req: Request, res: Response) => {
     const { phone, email, firstName, lastName, otpCode } = req.body;
 
     // Validate input
@@ -36,7 +76,7 @@ export class AuthController {
       return ResponseHandler.validationError(res, errors);
     }
 
-    const result = await AuthService.register({
+    const result = await EnhancedAuthService.completeRegistration({
       phone: ValidationUtil.sanitizePhone(phone),
       email: email.toLowerCase().trim(),
       firstName: ValidationUtil.sanitizeString(firstName),
@@ -44,7 +84,48 @@ export class AuthController {
       otpCode,
     });
 
-    return ResponseHandler.created(res, result, 'Registration successful');
+    // Registration successful - redirect to login page would be handled by frontend
+    return ResponseHandler.created(res, {
+      ...result,
+      redirectTo: '/login'
+    }, 'Registration completed successfully');
+  });
+
+  static requestLoginOTP = asyncHandler(async (req: Request, res: Response) => {
+    const { phone } = req.body;
+    
+    // Debug logging for production environment
+    console.log('RequestLoginOTP body received:', JSON.stringify(req.body, null, 2));
+    console.log('RequestLoginOTP phone value:', phone);
+    console.log('RequestLoginOTP phone type:', typeof phone);
+
+    if (!phone || phone.trim() === '') {
+      // Log debug information separately
+      console.log('RequestLoginOTP validation failed - debug info:', {
+        received: phone,
+        type: typeof phone,
+        body: req.body
+      });
+      
+      return ResponseHandler.validationError(res, [{
+        field: 'phone',
+        message: 'Phone number is required'
+      }]);
+    }
+
+    // Validate phone number format
+    const phoneError = ValidationUtil.validatePhone(phone);
+    if (phoneError) {
+      return ResponseHandler.validationError(res, [phoneError]);
+    }
+
+    const result = await EnhancedAuthService.requestOTP(
+      ValidationUtil.sanitizePhone(phone),
+      'login',
+      'phone'
+    );
+
+    return ResponseHandler.success(res, result);
   });
 
   static requestOTP = asyncHandler(async (req: Request, res: Response) => {
@@ -94,6 +175,33 @@ export class AuthController {
     );
 
     return ResponseHandler.success(res, result);
+  });
+
+  static verifyLoginOTP = asyncHandler(async (req: Request, res: Response) => {
+    const { phone, otpCode } = req.body;
+
+    const errors = [];
+    
+    const phoneError = ValidationUtil.validatePhone(phone);
+    if (phoneError) errors.push(phoneError);
+    
+    const otpError = ValidationUtil.validateOTP(otpCode);
+    if (otpError) errors.push(otpError);
+
+    if (errors.length > 0) {
+      return ResponseHandler.validationError(res, errors);
+    }
+
+    const result = await EnhancedAuthService.verifyOTPAndLogin(
+      ValidationUtil.sanitizePhone(phone),
+      otpCode
+    );
+
+    // Login successful - redirect to home page would be handled by frontend
+    return ResponseHandler.success(res, {
+      ...result,
+      redirectTo: '/home'
+    }, 'Login successful');
   });
 
   static verifyOTP = asyncHandler(async (req: Request, res: Response) => {

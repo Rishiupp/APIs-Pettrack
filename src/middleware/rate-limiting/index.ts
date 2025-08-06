@@ -16,13 +16,21 @@ export const defaultRateLimit = rateLimit({
 
 // Strict rate limiting for sensitive operations
 export const strictRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 requests per windowMs
+  windowMs: 2 * 60 * 1000, // 2 minutes
+  max: 5, // limit each phone/identifier to 5 requests per windowMs
   message: 'Too many attempts, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Use phone/identifier as key for rate limiting per phone number
+    const identifier = req.body?.phone || req.body?.identifier;
+    if (identifier) {
+      return `strict_${identifier}`;
+    }
+    return `strict_${ipKeyGenerator(req.ip || '127.0.0.1')}`;
+  },
   handler: (req, res) => {
-    ResponseHandler.tooManyRequests(res, 'Too many attempts, please wait 15 minutes');
+    ResponseHandler.tooManyRequests(res, 'Too many attempts, please wait 2 minutes');
   },
 });
 

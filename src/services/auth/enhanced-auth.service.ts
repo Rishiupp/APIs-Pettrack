@@ -29,7 +29,7 @@ export class EnhancedAuthService {
       ? identifier.toLowerCase().trim()
       : identifier.replace(/\s+/g, '');
 
-    // Check rate limiting - only 3 attempts per 10 minutes
+    // Check rate limiting - only 3 attempts per 2 minutes
     const whereClause = isEmail 
       ? { email: sanitizedIdentifier }
       : { phone: sanitizedIdentifier };
@@ -38,13 +38,13 @@ export class EnhancedAuthService {
       where: {
         user: whereClause,
         createdAt: {
-          gte: new Date(Date.now() - 10 * 60 * 1000), // 10 minutes ago
+          gte: new Date(Date.now() - 2 * 60 * 1000), // 2 minutes ago
         },
       },
     });
 
     if (recentAttempts >= 3) {
-      throw new AppError('Too many OTP requests. Please try again after 10 minutes.', 429);
+      throw new AppError('Too many OTP requests. Please try again after 2 minutes.', 429);
     }
 
     // Find existing user
@@ -107,7 +107,7 @@ export class EnhancedAuthService {
             ...(isPhone ? { phone: sanitizedIdentifier } : { email: sanitizedIdentifier }),
             isActive: false,
             createdAt: {
-              lt: new Date(Date.now() - 10 * 60 * 1000), // Older than 10 minutes
+              lt: new Date(Date.now() - 2 * 60 * 1000), // Older than 2 minutes
             },
           },
         });
@@ -185,6 +185,133 @@ export class EnhancedAuthService {
       expiresIn: config.otp.expiryTime,
       deliveryMethod: method,
     };
+  }
+
+  /**
+   * Complete registration after OTP verification
+   */
+  static async completeRegistration(userData: {
+    phone: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    otpCode: string;
+  }) {
+    const { phone, email, firstName, lastName, otpCode } = userData;
+    const sanitizedPhone = phone.replace(/\s+/g, '');
+
+    // Check if active user already exists (ignore inactive temp users)
+    const existingActiveUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phone: sanitizedPhone },
+          { email: email.toLowerCase() },
+        ],
+        isActive: true, // Only check active users
+      },
+    });
+
+    if (existingActiveUser) {
+      throw new AppError('User already exists with this phone or email', 409);
+    }
+
+    try {
+      // Clean up any old inactive temp users for this phone
+      await prisma.user.deleteMany({
+        where: {
+          phone: sanitizedPhone,
+          isActive: false,
+          createdAt: {
+            lt: new Date(Date.now() - 2 * 60 * 1000), // Older than 2 minutes
+          },
+        },
+      });
+
+      // Find the most recent temporary user created during OTP request
+      let user = await prisma.user.findFirst({
+        where: {
+          phone: sanitizedPhone,
+          isActive: false, // Find inactive temp user
+        },
+        orderBy: {
+          createdAt: 'desc', // Get the most recent one
+        },
+      });
+
+      console.log(`Debug: Looking for temp user with phone: ${sanitizedPhone}`);
+      console.log(`Debug: Found temp user:`, user ? { id: user.id, phone: user.phone, isActive: user.isActive } : 'null');
+
+      if (!user) {
+        throw new AppError('Please request OTP first before registering', 400);
+      }
+
+      // Verify the provided OTP
+      const otpHash = CryptoUtil.hashOTP(otpCode);
+      
+      console.log(`Debug: Verifying OTP for user ${user.id}`);
+      console.log(`Debug: Looking for OTP with purpose: registration`);
+      
+      // Find valid OTP for this user
+      const validOTP = await prisma.oTPCode.findFirst({
+        where: {
+          userId: user.id,
+          codeHash: otpHash,
+          purpose: OTPPurpose.registration,
+          isUsed: false,
+          expiresAt: { gt: new Date() },
+        },
+      });
+
+      console.log(`Debug: Found valid OTP:`, validOTP ? { id: validOTP.id, isUsed: validOTP.isUsed, expiresAt: validOTP.expiresAt } : 'null');
+
+      if (!validOTP) {
+        throw new AppError('Invalid or expired OTP. Please request a new OTP first.', 400);
+      }
+
+      // Mark OTP as used
+      await prisma.oTPCode.update({
+        where: { id: validOTP.id },
+        data: { isUsed: true },
+      });
+
+      // Update user with complete registration details and activate
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          email: email.toLowerCase(),
+          firstName,
+          lastName,
+          phoneVerified: true,
+          isActive: true,
+        },
+      });
+
+      // Create pet owner profile
+      await prisma.petOwner.create({
+        data: {
+          userId: user.id,
+        },
+      });
+
+      // Don't generate tokens here - user should login after registration
+      return {
+        success: true,
+        message: 'Registration completed successfully. Please login to continue.',
+        user: {
+          id: user.id,
+          email: user.email,
+          phone: user.phone,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          emailVerified: user.emailVerified,
+          phoneVerified: user.phoneVerified,
+        },
+      };
+    } catch (error: any) {
+      // Clean up any created resources on error
+      throw error;
+    }
   }
 
   /**

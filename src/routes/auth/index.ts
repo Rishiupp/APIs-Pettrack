@@ -28,9 +28,15 @@ router.post('/debug', (req, res) => {
   });
 });
 
-// Public routes
-router.post('/register', strictRateLimit, AuthController.register);
-// Temporarily disable rate limiting for debugging
+// Public routes - New Authentication Flow
+router.post('/register', strictRateLimit, AuthController.register); // Step 1: Request OTP for registration
+router.post('/register/complete', strictRateLimit, AuthController.completeRegistration); // Step 2: Complete registration with OTP
+
+// Login flow (phone-only)
+router.post('/login/otp/request', AuthController.requestLoginOTP); // Step 1: Request OTP for login
+router.post('/login/otp/verify', strictRateLimit, AuthController.verifyLoginOTP); // Step 2: Verify OTP and login
+
+// Legacy routes (keep for backward compatibility)
 router.post('/otp/request', AuthController.requestOTP);
 router.post('/otp/verify', strictRateLimit, AuthController.verifyOTP);
 router.post('/refresh', AuthController.refreshToken);
