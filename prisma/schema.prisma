@@ -33,6 +33,8 @@ enum AuthProvider {
 }
 
 enum Gender {
+  Male
+  Female
   male
   female
   unknown
@@ -74,6 +76,8 @@ enum PaymentPurpose {
   qr_registration
   premium_features
   vet_consultation
+  pet_registration
+  pet_tag
 }
 
 enum RefundStatus {
@@ -146,6 +150,31 @@ enum PoolStatus {
   active
   depleted
   archived
+}
+
+enum ApplicationType {
+  new
+  renewal
+}
+
+enum IdentifierType {
+  token_or_license
+  microchip
+  registration_number
+}
+
+enum ApplicantType {
+  Owner
+  Guardian
+  Caretaker
+}
+
+enum DocumentType {
+  pet_photo
+  rabies_certificate
+  aadhaar_card
+  signature
+  other
 }
 
 enum OperationType {
@@ -659,6 +688,127 @@ model SystemAnalytics {
   timestamp   DateTime @default(now())
 
   @@map("system_analytics")
+}
+
+// Pet Registration Application System
+model PetRegistrationApplication {
+  id                           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationType              ApplicationType   @map("application_type")
+  identifierType               IdentifierType    @map("identifier_type")
+  identifierNumber             String?           @map("identifier_number") @db.VarChar(50)
+  submittedAt                  DateTime          @map("submitted_at")
+  
+  // Location Info
+  city                         String            @db.VarChar(100)
+  state                        String            @db.VarChar(100)
+  country                      String            @db.VarChar(100)
+  
+  // Applicant Info
+  applicantType                ApplicantType     @map("applicant_type")
+  applicantName                String            @map("applicant_name") @db.VarChar(200)
+  fatherOrHusbandName          String?           @map("father_or_husband_name") @db.VarChar(200)
+  applicantEmail               String            @map("applicant_email") @db.VarChar(255)
+  applicantPhone               String            @map("applicant_phone") @db.VarChar(20)
+  aadhaarNumber                String?           @map("aadhaar_number") @db.VarChar(20)
+  pincode                      String            @db.VarChar(10)
+  address                      String            @db.Text
+  
+  // Declaration
+  hasTokenNumber               Boolean           @default(false) @map("has_token_number")
+  declarationAcknowledgement   String            @map("declaration_acknowledgement") @db.Text
+  acceptedTerms                Boolean           @default(false) @map("accepted_terms")
+  
+  // Checkout Info
+  registrationFee              Decimal           @map("registration_fee") @db.Decimal(10, 2)
+  convenienceFee               Decimal           @map("convenience_fee") @db.Decimal(10, 2)
+  gst                          Decimal           @db.Decimal(10, 2)
+  totalAmount                  Decimal           @map("total_amount") @db.Decimal(10, 2)
+  currency                     String            @default("INR") @db.VarChar(3)
+  
+  // Delivery Address
+  deliveryAddressLine          String            @map("delivery_address_line") @db.Text
+  deliveryCity                 String            @map("delivery_city") @db.VarChar(100)
+  deliveryState                String            @map("delivery_state") @db.VarChar(100)
+  deliveryPincode              String            @map("delivery_pincode") @db.VarChar(10)
+  
+  createdAt                    DateTime          @default(now()) @map("created_at")
+  updatedAt                    DateTime          @updatedAt @map("updated_at")
+  
+  // Relations
+  pets                         RegisteredPet[]
+  documents                    ApplicationDocument[]
+  checkoutItems                CheckoutItem[]
+  
+  @@map("pet_registration_applications")
+}
+
+model RegisteredPet {
+  id                              String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationId                   String                      @map("application_id") @db.Uuid
+  petName                         String                      @map("pet_name") @db.VarChar(100)
+  gender                          Gender
+  breed                           String                      @db.VarChar(100)
+  dateOfBirth                     DateTime                    @map("date_of_birth") @db.Date
+  ageOnRegistration               String                      @map("age_on_registration") @db.VarChar(20)
+  lastRabiesVaccinationDate       DateTime                    @map("last_rabies_vaccination_date") @db.Date
+  veterinaryDoctorName            String                      @map("veterinary_doctor_name") @db.VarChar(200)
+  veterinaryDoctorRegNumber       String                      @map("veterinary_doctor_reg_number") @db.VarChar(100)
+  veterinaryClinicOrHospitalName  String                      @map("veterinary_clinic_or_hospital_name") @db.VarChar(200)
+  createdAt                       DateTime                    @default(now()) @map("created_at")
+  updatedAt                       DateTime                    @updatedAt @map("updated_at")
+  
+  // Relations
+  application                     PetRegistrationApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  documents                       PetDocument[]
+  
+  @@map("registered_pets")
+}
+
+model ApplicationDocument {
+  id               String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationId    String                      @map("application_id") @db.Uuid
+  documentType     DocumentType                @map("document_type")
+  fileName         String                      @map("file_name") @db.VarChar(255)
+  filePath         String                      @map("file_path") @db.VarChar(500)
+  mimeType         String                      @map("mime_type") @db.VarChar(100)
+  sizeBytes        BigInt                      @map("size_bytes")
+  createdAt        DateTime                    @default(now()) @map("created_at")
+  
+  // Relations
+  application      PetRegistrationApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  
+  @@map("application_documents")
+}
+
+model PetDocument {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  petId        String        @map("pet_id") @db.Uuid
+  documentType DocumentType  @map("document_type")
+  fileName     String        @map("file_name") @db.VarChar(255)
+  filePath     String        @map("file_path") @db.VarChar(500)
+  mimeType     String        @map("mime_type") @db.VarChar(100)
+  sizeBytes    BigInt        @map("size_bytes")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  
+  // Relations
+  pet          RegisteredPet @relation(fields: [petId], references: [id], onDelete: Cascade)
+  
+  @@map("pet_documents")
+}
+
+model CheckoutItem {
+  id               String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationId    String                      @map("application_id") @db.Uuid
+  sku              String                      @db.VarChar(50)
+  itemName         String                      @map("item_name") @db.VarChar(255)
+  quantity         Int                         @default(1)
+  unitPrice        Decimal                     @map("unit_price") @db.Decimal(10, 2)
+  createdAt        DateTime                    @default(now()) @map("created_at")
+  
+  // Relations
+  application      PetRegistrationApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  
+  @@map("checkout_items")
 }
 
 // Indexes

@@ -12,6 +12,7 @@ import { defaultRateLimit } from './middleware/rate-limiting';
 // Import routes
 import authRoutes from './routes/auth';
 import petRoutes from './routes/pets';
+import petRegistrationRoutes from './routes/pet-registration';
 import qrRoutes from './routes/qr';
 import paymentRoutes from './routes/payments';
 import notificationRoutes from './routes/notifications';
@@ -57,6 +58,7 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/pets', petRoutes);
+app.use('/api/v1/pet-registration', petRegistrationRoutes);
 app.use('/api/v1/qr', qrRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
