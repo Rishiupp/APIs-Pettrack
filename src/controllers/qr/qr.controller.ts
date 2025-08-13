@@ -137,4 +137,26 @@ export class QRController {
     const result = await QRService.activateQRCode(qrId);
     return ResponseHandler.success(res, result, 'QR code activated successfully');
   });
+
+  static getPetScanLocations = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { petId } = req.params;
+    const userId = req.user?.id;
+
+    if (!petId) {
+      return ResponseHandler.error(res, 'Pet ID is required', 400);
+    }
+
+    if (!userId) {
+      return ResponseHandler.error(res, 'User authentication required', 401);
+    }
+
+    try {
+      const locations = await QRService.getPetScanLocations(petId, userId);
+      return ResponseHandler.success(res, locations);
+    } catch (error: any) {
+      const statusCode = error.message.includes('not found') ? 404 : 
+                        error.message.includes('not authorized') ? 403 : 500;
+      return ResponseHandler.error(res, error.message, statusCode);
+    }
+  });
 }

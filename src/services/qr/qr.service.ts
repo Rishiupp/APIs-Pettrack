@@ -185,7 +185,6 @@ export class QRService {
         scannerIp: req.ip,
         userAgent: req.get('User-Agent'),
         scanLocation: scanData.location,
-        scannerContactInfo: scanData.scannerContact,
       });
 
       throw new AppError('Invalid QR code', 404);
@@ -208,12 +207,11 @@ export class QRService {
       scannerIp: req.ip,
       userAgent: req.get('User-Agent'),
       scanLocation: scanData.location,
-      scannerContactInfo: scanData.scannerContact,
     });
 
-    // If scan was successful and scanner provided contact info, send notification to owner
-    if (scanResult === ScanResult.success && scanData.scannerContact && qrCode.pet) {
-      await this.notifyPetOwner(qrCode.pet, scanEvent, scanData.scannerContact);
+    // If scan was successful, send notification to owner
+    if (scanResult === ScanResult.success && qrCode.pet) {
+      await this.notifyPetOwner(qrCode.pet, scanEvent);
     }
 
     if (scanResult !== ScanResult.success) {
@@ -233,7 +231,6 @@ export class QRService {
     scannerIp?: string;
     userAgent?: string;
     scanLocation?: Location;
-    scannerContactInfo?: any;
   }) {
     let locationString = null;
     let locationName = null;
@@ -261,7 +258,7 @@ export class QRService {
         locationName,
         city,
         countryCode,
-        scannerContactInfo: scanData.scannerContactInfo,
+        scannerContactInfo: undefined,
         deviceType: this.detectDeviceType(scanData.userAgent),
       },
     });
@@ -282,19 +279,18 @@ export class QRService {
     return DeviceType.desktop;
   }
 
-  private static async notifyPetOwner(pet: any, _scanEvent: any, scannerContact: any) {
+  private static async notifyPetOwner(pet: any, scanEvent: any) {
     try {
       // Send SMS notification to pet owner
       if (pet.owner?.user?.phone) {
-        const scannerInfo = scannerContact?.name || scannerContact?.phone || 'someone nearby';
-        await SMSService.sendNotification(pet.owner.user.phone, pet.name, scannerInfo);
+        await SMSService.sendNotification(pet.owner.user.phone, pet.name, 'someone nearby');
       }
 
       // Also send push notification if available
       // TODO: Implement push notification service integration
       
       console.log(`Notification sent to pet owner: ${pet.owner.user.firstName} ${pet.owner.user.lastName}`);
-      console.log(`Pet ${pet.name} was scanned by ${scannerContact.name || 'someone'}`);
+      console.log(`Pet ${pet.name} was scanned at ${scanEvent.locationName || 'unknown location'}`);
     } catch (error) {
       console.error('Failed to notify pet owner:', error);
     }
@@ -396,5 +392,82 @@ export class QRService {
     };
 
     return { scans, meta };
+  }
+
+  static async getPetScanLocations(petId: string, userId: string) {
+    // Check access to pet
+    const pet = await prisma.pet.findUnique({
+      where: { id: petId },
+      include: { owner: true },
+    });
+
+    if (!pet) {
+      throw new AppError('Pet not found', 404);
+    }
+
+    if (pet.owner.userId !== userId) {
+      // Check if user is executive/admin
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+
+      if (!user || user.role === 'pet_owner') {
+        throw new AppError('Not authorized to view scan locations for this pet', 403);
+      }
+    }
+
+    const scanLocations = await prisma.qRScanEvent.findMany({
+      where: {
+        qrCode: {
+          assignedToPet: petId,
+        },
+        scanLocation: {
+          not: null,
+        },
+        scanResult: 'success',
+      },
+      orderBy: { scanTimestamp: 'desc' },
+      select: {
+        id: true,
+        scanLocation: true,
+        locationAccuracy: true,
+        locationName: true,
+        city: true,
+        countryCode: true,
+        scanTimestamp: true,
+        deviceType: true,
+      },
+    });
+
+    // Parse location strings and convert to coordinates
+    const locationsWithCoordinates = scanLocations.map((scan) => {
+      let latitude = null;
+      let longitude = null;
+
+      if (scan.scanLocation) {
+        // Parse "POINT(lng lat)" format
+        const match = scan.scanLocation.match(/POINT\(([^)]+)\)/);
+        if (match && match[1]) {
+          const [lng, lat] = match[1].split(' ').map(Number);
+          longitude = lng;
+          latitude = lat;
+        }
+      }
+
+      return {
+        id: scan.id,
+        latitude,
+        longitude,
+        accuracy: scan.locationAccuracy ? Number(scan.locationAccuracy) : null,
+        locationName: scan.locationName,
+        city: scan.city,
+        countryCode: scan.countryCode,
+        timestamp: scan.scanTimestamp,
+        deviceType: scan.deviceType,
+      };
+    }).filter(location => location.latitude && location.longitude);
+
+    return locationsWithCoordinates;
   }
 }

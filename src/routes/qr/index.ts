@@ -20,6 +20,7 @@ router.get('/available', requireExecutive, QRController.getAvailableQRCodes);
 router.post('/pets/:petId/assign', requireAuthenticated, QRController.assignQRToPet);
 router.get('/pets/:petId/codes', requireAuthenticated, QRController.getPetQRCodes);
 router.get('/pets/:petId/scans', requireAuthenticated, QRController.getPetScanHistory);
+router.get('/pets/:petId/locations', requireAuthenticated, QRController.getPetScanLocations);
 
 // QR code management
 router.post('/:qrId/activate', requireExecutive, QRController.activateQRCode);

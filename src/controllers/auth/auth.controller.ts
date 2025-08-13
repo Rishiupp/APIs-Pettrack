@@ -92,37 +92,50 @@ export class AuthController {
   });
 
   static requestLoginOTP = asyncHandler(async (req: Request, res: Response) => {
-    const { phone } = req.body;
+    const { identifier, deliveryMethod } = req.body;
     
     // Debug logging for production environment
     console.log('RequestLoginOTP body received:', JSON.stringify(req.body, null, 2));
-    console.log('RequestLoginOTP phone value:', phone);
-    console.log('RequestLoginOTP phone type:', typeof phone);
+    console.log('RequestLoginOTP identifier value:', identifier);
+    console.log('RequestLoginOTP identifier type:', typeof identifier);
 
-    if (!phone || phone.trim() === '') {
+    if (!identifier || identifier.trim() === '') {
       // Log debug information separately
       console.log('RequestLoginOTP validation failed - debug info:', {
-        received: phone,
-        type: typeof phone,
+        received: identifier,
+        type: typeof identifier,
         body: req.body
       });
       
       return ResponseHandler.validationError(res, [{
-        field: 'phone',
-        message: 'Phone number is required'
+        field: 'identifier',
+        message: 'Phone number or email is required'
       }]);
     }
 
-    // Validate phone number format
-    const phoneError = ValidationUtil.validatePhone(phone);
-    if (phoneError) {
-      return ResponseHandler.validationError(res, [phoneError]);
+    // Validate identifier format (phone or email)
+    const isEmail = ValidationUtil.validateEmail(identifier) === null;
+    const isPhone = ValidationUtil.validatePhone(identifier) === null;
+    
+    if (!isEmail && !isPhone) {
+      return ResponseHandler.validationError(res, [{
+        field: 'identifier',
+        message: 'Please provide a valid phone number or email address'
+      }]);
+    }
+
+    // Validate delivery method if provided
+    if (deliveryMethod && !['phone', 'email'].includes(deliveryMethod)) {
+      return ResponseHandler.validationError(res, [{
+        field: 'deliveryMethod',
+        message: 'Delivery method must be "phone" or "email"'
+      }]);
     }
 
     const result = await EnhancedAuthService.requestOTP(
-      ValidationUtil.sanitizePhone(phone),
+      identifier.trim(),
       'login',
-      'phone'
+      deliveryMethod
     );
 
     return ResponseHandler.success(res, result);
@@ -178,12 +191,27 @@ export class AuthController {
   });
 
   static verifyLoginOTP = asyncHandler(async (req: Request, res: Response) => {
-    const { phone, otpCode } = req.body;
+    const { identifier, otpCode } = req.body;
 
     const errors = [];
     
-    const phoneError = ValidationUtil.validatePhone(phone);
-    if (phoneError) errors.push(phoneError);
+    if (!identifier || identifier.trim() === '') {
+      errors.push({
+        field: 'identifier',
+        message: 'Phone number or email is required',
+      });
+    } else {
+      // Validate identifier format (phone or email)
+      const isEmail = ValidationUtil.validateEmail(identifier) === null;
+      const isPhone = ValidationUtil.validatePhone(identifier) === null;
+      
+      if (!isEmail && !isPhone) {
+        errors.push({
+          field: 'identifier',
+          message: 'Please provide a valid phone number or email address'
+        });
+      }
+    }
     
     const otpError = ValidationUtil.validateOTP(otpCode);
     if (otpError) errors.push(otpError);
@@ -193,7 +221,7 @@ export class AuthController {
     }
 
     const result = await EnhancedAuthService.verifyOTPAndLogin(
-      ValidationUtil.sanitizePhone(phone),
+      identifier.trim(),
       otpCode
     );
 

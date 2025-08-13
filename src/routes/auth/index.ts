@@ -32,7 +32,7 @@ router.post('/debug', (req, res) => {
 router.post('/register', strictRateLimit, AuthController.register); // Step 1: Request OTP for registration
 router.post('/register/complete', strictRateLimit, AuthController.completeRegistration); // Step 2: Complete registration with OTP
 
-// Login flow (phone-only)
+// Login flow (phone or email)
 router.post('/login/otp/request', AuthController.requestLoginOTP); // Step 1: Request OTP for login
 router.post('/login/otp/verify', strictRateLimit, AuthController.verifyLoginOTP); // Step 2: Verify OTP and login
 

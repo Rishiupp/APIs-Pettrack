@@ -11,10 +11,18 @@ Pet Track now supports multiple authentication methods:
 
 ## 🔐 Authentication Flow 1: Phone/Email + OTP
 
-### Step 1: Request OTP
-**Endpoint:** `POST /api/auth/otp/request`
+### Step 1: Request Login OTP
+**Endpoint:** `POST /api/auth/login/otp/request`
 
 **Request Body:**
+```json
+{
+  "identifier": "+1234567890", // Phone number or email
+  "deliveryMethod": "phone" // Optional: "phone" | "email" (auto-detected if not provided)
+}
+```
+
+**Alternative Legacy Endpoint:** `POST /api/auth/otp/request`
 ```json
 {
   "identifier": "+1234567890", // Phone number or email
@@ -35,10 +43,18 @@ Pet Track now supports multiple authentication methods:
 }
 ```
 
-### Step 2: Verify OTP
-**Endpoint:** `POST /api/auth/otp/verify`
+### Step 2: Verify Login OTP
+**Endpoint:** `POST /api/auth/login/otp/verify`
 
 **Request Body:**
+```json
+{
+  "identifier": "+1234567890", // Same phone/email used in request
+  "otpCode": "123456"
+}
+```
+
+**Alternative Legacy Endpoint:** `POST /api/auth/otp/verify`
 ```json
 {
   "identifier": "+1234567890", // Same phone/email used in request
@@ -198,17 +214,36 @@ Pet Track now supports multiple authentication methods:
 
 ### Phone/Email OTP Flow
 ```javascript
-// Step 1: Request OTP
-const requestOTP = async (identifier, purpose = 'login') => {
-  const response = await fetch('/api/auth/otp/request', {
+// Step 1: Request Login OTP
+const requestLoginOTP = async (identifier, deliveryMethod) => {
+  const response = await fetch('/api/auth/login/otp/request', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identifier, purpose })
+    body: JSON.stringify({ identifier, deliveryMethod })
   });
   return response.json();
 };
 
-// Step 2: Verify OTP
+// Step 2: Verify Login OTP
+const verifyLoginOTP = async (identifier, otpCode) => {
+  const response = await fetch('/api/auth/login/otp/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier, otpCode })
+  });
+  return response.json();
+};
+
+// Legacy methods (still supported)
+const requestOTP = async (identifier, purpose = 'login', deliveryMethod) => {
+  const response = await fetch('/api/auth/otp/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier, purpose, deliveryMethod })
+  });
+  return response.json();
+};
+
 const verifyOTP = async (identifier, otpCode) => {
   const response = await fetch('/api/auth/otp/verify', {
     method: 'POST',

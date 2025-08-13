@@ -70,14 +70,26 @@ export interface FileUpload {
 
 // OTP types
 export interface OTPRequest {
-  phone: string;
-  purpose: 'login' | 'registration' | 'phone_verification' | 'password_reset';
+  identifier: string; // phone or email
+  purpose: 'login' | 'registration' | 'phone_verification' | 'email_verification' | 'password_reset';
+  deliveryMethod?: 'phone' | 'email'; // auto-detected if not provided
 }
 
 export interface OTPVerification {
-  phone: string;
+  identifier: string; // phone or email
   code: string;
-  transactionId: string;
+  transactionId?: string;
+}
+
+// Login types
+export interface LoginOTPRequest {
+  identifier: string; // phone or email
+  deliveryMethod?: 'phone' | 'email'; // auto-detected if not provided
+}
+
+export interface LoginOTPVerification {
+  identifier: string; // phone or email
+  otpCode: string;
 }
 
 // Location types
@@ -98,12 +110,6 @@ export interface LocationInfo {
 // QR Code scan types
 export interface QRScanRequest {
   location?: Location;
-  scannerContact?: {
-    name?: string;
-    phone?: string;
-    email?: string;
-    message?: string;
-  };
 }
 
 // Payment types
