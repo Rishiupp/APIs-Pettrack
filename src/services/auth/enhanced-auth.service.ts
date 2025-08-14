@@ -10,9 +10,9 @@ import { ValidationUtil } from '../../utils/validation';
 
 export class EnhancedAuthService {
   /**
-   * Request OTP for phone or email
+   * Request OTP for phone or email - Enhanced to send to both when available
    */
-  static async requestOTP(identifier: string, purpose: OTPPurpose, deliveryMethod?: 'phone' | 'email') {
+  static async requestOTP(identifier: string, purpose: OTPPurpose, deliveryMethod?: 'phone' | 'email' | 'both', additionalData?: { email?: string; phone?: string }) {
     // Determine if identifier is phone or email
     const isEmail = ValidationUtil.validateEmail(identifier) === null;
     const isPhone = ValidationUtil.validatePhone(identifier) === null;
@@ -21,9 +21,6 @@ export class EnhancedAuthService {
       throw new AppError('Invalid phone number or email address', 400);
     }
 
-    // Set delivery method based on identifier type if not specified
-    const method = deliveryMethod || (isEmail ? 'email' : 'phone');
-    
     // Sanitize identifier
     const sanitizedIdentifier = isEmail 
       ? identifier.toLowerCase().trim()
@@ -43,7 +40,7 @@ export class EnhancedAuthService {
       },
     });
 
-    if (recentAttempts >= 3) {
+    if (recentAttempts >= 6) { // Increased limit for dual delivery
       throw new AppError('Too many OTP requests. Please try again after 2 minutes.', 429);
     }
 
@@ -89,12 +86,13 @@ export class EnhancedAuthService {
       }
     }
 
-    // Generate OTP
-    const otpCode = CryptoUtil.generateOTP(6);
-    const hashedOTP = CryptoUtil.hashOTP(otpCode);
+    // Generate OTP codes
+    const phoneOtp = CryptoUtil.generateOTP(6);
+    const emailOtp = CryptoUtil.generateOTP(6);
     const expiresAt = new Date(Date.now() + config.otp.expiryTime * 1000);
 
     let userId: string;
+    let targetUser = existingUser;
 
     if (existingUser) {
       userId = existingUser.id;
@@ -136,10 +134,10 @@ export class EnhancedAuthService {
         }
 
         // Use existing temp user or create new one
-        const tempUser = recentTempUser || await prisma.user.create({
+        targetUser = recentTempUser || await prisma.user.create({
           data: {
-            phone: isPhone ? sanitizedIdentifier : null,
-            email: isEmail ? sanitizedIdentifier : null,
+            phone: isPhone ? sanitizedIdentifier : (additionalData?.phone ? ValidationUtil.sanitizePhone(additionalData.phone) : null),
+            email: isEmail ? sanitizedIdentifier : (additionalData?.email ? additionalData.email.toLowerCase().trim() : null),
             firstName: 'Temp', // Will be updated during registration
             lastName: 'User', // Will be updated during registration
             role: UserRole.pet_owner,
@@ -148,42 +146,81 @@ export class EnhancedAuthService {
             isActive: false, // Mark as inactive until registration completes
           },
         });
-        userId = tempUser.id;
+        userId = targetUser.id;
       } else {
         throw new AppError('User not found', 404);
       }
     }
 
-    // Store OTP
-    await prisma.oTPCode.create({
-      data: {
-        userId,
-        codeHash: hashedOTP,
-        purpose,
-        deliveryMethod: method,
-        expiresAt,
-      },
-    });
+    // For registration requests, send OTP to both phone and email if both are available
+    const deliveryMethods: Array<'phone' | 'email'> = [];
+    const otpCodes: { method: 'phone' | 'email'; code: string; hash: string }[] = [];
 
-    // Send OTP via appropriate method
+    if (purpose === OTPPurpose.registration) {
+      // For registration during /register endpoint (phone provided)
+      if (targetUser?.phone) {
+        deliveryMethods.push('phone');
+        otpCodes.push({ method: 'phone', code: phoneOtp, hash: CryptoUtil.hashOTP(phoneOtp) });
+      }
+      if (targetUser?.email) {
+        deliveryMethods.push('email');
+        otpCodes.push({ method: 'email', code: emailOtp, hash: CryptoUtil.hashOTP(emailOtp) });
+      }
+    } else {
+      // For login, determine method based on identifier or deliveryMethod
+      const method = deliveryMethod && deliveryMethod !== 'both' 
+        ? deliveryMethod 
+        : (isEmail ? 'email' : 'phone');
+      
+      deliveryMethods.push(method);
+      const code = method === 'email' ? emailOtp : phoneOtp;
+      otpCodes.push({ method, code, hash: CryptoUtil.hashOTP(code) });
+    }
+
+    // Store OTP codes in database
+    for (const otpData of otpCodes) {
+      await prisma.oTPCode.create({
+        data: {
+          userId,
+          codeHash: otpData.hash,
+          purpose,
+          deliveryMethod: otpData.method,
+          expiresAt,
+        },
+      });
+    }
+
+    // Send OTP via appropriate methods
+    const sendResults: string[] = [];
+    
     try {
-      if (method === 'email') {
-        await EmailService.sendOTP(sanitizedIdentifier, otpCode, existingUser?.firstName);
-      } else {
-        await SMSService.sendOTP(sanitizedIdentifier, otpCode);
+      for (const otpData of otpCodes) {
+        if (otpData.method === 'email' && targetUser?.email) {
+          await EmailService.sendOTP(targetUser.email, otpData.code, targetUser?.firstName);
+          sendResults.push('email');
+          console.log(`OTP sent to email ${targetUser.email}: ${otpData.code}`);
+        } else if (otpData.method === 'phone' && targetUser?.phone) {
+          await SMSService.sendOTP(targetUser.phone, otpData.code);
+          sendResults.push('phone');
+          console.log(`OTP sent to phone ${targetUser.phone}: ${otpData.code}`);
+        }
       }
     } catch (error) {
       console.error('Failed to send OTP:', error);
       // Continue execution - log OTP for development
-      console.log(`OTP for ${sanitizedIdentifier}: ${otpCode}`);
+      for (const otpData of otpCodes) {
+        console.log(`OTP for ${otpData.method}: ${otpData.code}`);
+      }
     }
 
-    console.log(`Debug: Created OTP for user ${userId}, code: ${otpCode}, expires: ${expiresAt}`);
+    console.log(`Debug: Created OTPs for user ${userId}, expires: ${expiresAt}`);
 
     return {
-      message: 'OTP sent successfully',
+      message: sendResults.length > 1 
+        ? 'OTP sent to both phone and email' 
+        : `OTP sent to ${sendResults[0] || 'your device'}`,
       expiresIn: config.otp.expiryTime,
-      deliveryMethod: method,
+      deliveryMethods: sendResults,
     };
   }
 
@@ -251,7 +288,7 @@ export class EnhancedAuthService {
       console.log(`Debug: Verifying OTP for user ${user.id}`);
       console.log(`Debug: Looking for OTP with purpose: registration`);
       
-      // Find valid OTP for this user
+      // Find valid OTP for this user (check both phone and email OTPs)
       const validOTP = await prisma.oTPCode.findFirst({
         where: {
           userId: user.id,
@@ -262,15 +299,20 @@ export class EnhancedAuthService {
         },
       });
 
-      console.log(`Debug: Found valid OTP:`, validOTP ? { id: validOTP.id, isUsed: validOTP.isUsed, expiresAt: validOTP.expiresAt } : 'null');
+      console.log(`Debug: Found valid OTP:`, validOTP ? { id: validOTP.id, isUsed: validOTP.isUsed, expiresAt: validOTP.expiresAt, method: validOTP.deliveryMethod } : 'null');
 
       if (!validOTP) {
         throw new AppError('Invalid or expired OTP. Please request a new OTP first.', 400);
       }
 
-      // Mark OTP as used
-      await prisma.oTPCode.update({
-        where: { id: validOTP.id },
+      // Mark all OTP codes for this user and purpose as used (both phone and email)
+      await prisma.oTPCode.updateMany({
+        where: {
+          userId: user.id,
+          purpose: OTPPurpose.registration,
+          isUsed: false,
+          expiresAt: { gt: new Date() },
+        },
         data: { isUsed: true },
       });
 
@@ -340,10 +382,12 @@ export class EnhancedAuthService {
       throw new AppError('User not found', 404);
     }
 
-    // Find valid OTP
+    // Find valid OTP (check all OTPs for this user)
+    const hashedInputOTP = CryptoUtil.hashOTP(otpCode);
     const otpRecord = await prisma.oTPCode.findFirst({
       where: {
         userId: user.id,
+        codeHash: hashedInputOTP,
         isUsed: false,
         expiresAt: { gt: new Date() },
       },
@@ -351,6 +395,26 @@ export class EnhancedAuthService {
     });
 
     if (!otpRecord) {
+      // Check if there are any valid OTPs to increment attempts
+      const anyValidOTP = await prisma.oTPCode.findFirst({
+        where: {
+          userId: user.id,
+          isUsed: false,
+          expiresAt: { gt: new Date() },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (anyValidOTP) {
+        // Increment attempt count for the latest OTP
+        if (anyValidOTP.attemptsCount < anyValidOTP.maxAttempts) {
+          await prisma.oTPCode.update({
+            where: { id: anyValidOTP.id },
+            data: { attemptsCount: anyValidOTP.attemptsCount + 1 },
+          });
+        }
+      }
+      
       throw new AppError('Invalid or expired OTP', 400);
     }
 
@@ -359,23 +423,13 @@ export class EnhancedAuthService {
       throw new AppError('Maximum OTP attempts exceeded', 400);
     }
 
-    // Verify OTP
-    const hashedInputOTP = CryptoUtil.hashOTP(otpCode);
-    const isValidOTP = hashedInputOTP === otpRecord.codeHash;
-
-    if (!isValidOTP) {
-      // Increment attempt count
-      await prisma.oTPCode.update({
-        where: { id: otpRecord.id },
-        data: { attemptsCount: otpRecord.attemptsCount + 1 },
-      });
-
-      throw new AppError('Invalid OTP', 400);
-    }
-
-    // Mark OTP as used
-    await prisma.oTPCode.update({
-      where: { id: otpRecord.id },
+    // Mark all valid OTP codes for this user as used (both phone and email)
+    await prisma.oTPCode.updateMany({
+      where: {
+        userId: user.id,
+        isUsed: false,
+        expiresAt: { gt: new Date() },
+      },
       data: { isUsed: true },
     });
 

@@ -136,6 +136,11 @@ export class PetRegistrationService {
         // Create pets
         const createdPets = [];
         for (const petData of data.pets) {
+          // Generate registration number (format: PT + timestamp + random 4 digits)
+          const timestamp = Date.now().toString();
+          const random = Math.floor(1000 + Math.random() * 9000);
+          const registrationNumber = `PT${timestamp}${random}`;
+
           const pet = await tx.registeredPet.create({
             data: {
               applicationId: application.id,
@@ -150,6 +155,12 @@ export class PetRegistrationService {
               veterinaryClinicOrHospitalName: petData.veterinaryClinicOrHospitalName,
             },
           });
+
+          // Add registration number to pet object for response
+          const petWithRegNumber = {
+            ...pet,
+            registrationNumber: registrationNumber,
+          };
 
           // Create pet documents
           if (petData.petPhoto) {
@@ -178,7 +189,7 @@ export class PetRegistrationService {
             });
           }
 
-          createdPets.push(pet);
+          createdPets.push(petWithRegNumber);
         }
 
         // Create application documents
@@ -223,6 +234,7 @@ export class PetRegistrationService {
 
         return {
           applicationId: application.id,
+          registrationNumber: application.id, // Using application ID as registration number for now
           pets: createdPets,
           message: 'Pet registration application submitted successfully',
         };

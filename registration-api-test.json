@@ -1,0 +1,269 @@
+{
+  "auth_apis": {
+  "registration_api": {
+    "description": "Two-step user registration process with OTP verification",
+    "endpoints": {
+      "step1_request_otp": {
+        "method": "POST",
+        "url": "/auth/register",
+        "description": "Request OTP for registration",
+        "request_body": {
+          "phone": "+1234567890",
+          "email": "user@example.com",
+          "firstName": "John",
+          "lastName": "Doe"
+        },
+        "response": {
+          "success": true,
+          "message": "Registration initiated. Please verify OTP to complete registration.",
+          "phone": "+1234567890",
+          "email": "user@example.com",
+          "firstName": "John",
+          "lastName": "Doe",
+          "expiresIn": 300,
+          "deliveryMethods": ["phone", "email"]
+        }
+      },
+      "step2_complete_registration": {
+        "method": "POST",
+        "url": "/auth/register/complete",
+        "description": "Complete registration with OTP verification",
+        "request_body": {
+          "phone": "+1234567890",
+          "email": "user@example.com",
+          "firstName": "John",
+          "lastName": "Doe",
+          "otpCode": "123456"
+        },
+        "response": {
+          "success": true,
+          "message": "Registration completed successfully",
+          "user": {
+            "id": "user-id",
+            "email": "user@example.com",
+            "phone": "+1234567890",
+            "firstName": "John",
+            "lastName": "Doe",
+            "role": "pet_owner",
+            "emailVerified": false,
+            "phoneVerified": true
+          },
+          "redirectTo": "/login"
+        }
+      }
+    },
+    "validation_rules": {
+      "phone": "Required, valid phone number format",
+      "email": "Required, valid email format",
+      "firstName": "Required, non-empty string",
+      "lastName": "Required, non-empty string",
+      "otpCode": "Required, 6-digit numeric code"
+    },
+    "features": [
+      "OTP sent to both phone and email simultaneously",
+      "Rate limiting (6 attempts per 2 minutes)",
+      "Temporary user creation during registration process",
+      "Automatic pet owner profile creation",
+      "Input validation and sanitization",
+      "Duplicate user prevention"
+    ]
+  },
+  "login_api": {
+    "description": "Two-step login process with OTP verification supporting phone/email",
+    "endpoints": {
+      "step1_request_login_otp": {
+        "method": "POST",
+        "url": "/auth/login/otp/request",
+        "description": "Request OTP for login using phone or email",
+        "request_body": {
+          "identifier": "+1234567890",
+          "deliveryMethod": "phone"
+        },
+        "alternative_request": {
+          "identifier": "user@example.com",
+          "deliveryMethod": "email"
+        },
+        "response": {
+          "success": true,
+          "message": "OTP sent to phone",
+          "expiresIn": 300,
+          "deliveryMethods": ["phone"]
+        }
+      },
+      "step2_verify_login_otp": {
+        "method": "POST",
+        "url": "/auth/login/otp/verify",
+        "description": "Verify OTP and complete login",
+        "request_body": {
+          "identifier": "+1234567890",
+          "otpCode": "123456"
+        },
+        "response": {
+          "success": true,
+          "message": "Login successful",
+          "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+          "refreshToken": "refresh-token-here",
+          "user": {
+            "id": "user-id",
+            "email": "user@example.com",
+            "phone": "+1234567890",
+            "firstName": "John",
+            "lastName": "Doe",
+            "role": "pet_owner",
+            "emailVerified": true,
+            "phoneVerified": true,
+            "profilePicture": null,
+            "authProvider": "local"
+          },
+          "permissions": ["read:profile", "write:pets"],
+          "redirectTo": "/home"
+        }
+      }
+    },
+    "oauth_endpoints": {
+      "google_login": {
+        "method": "POST",
+        "url": "/auth/google",
+        "description": "Login with Google OAuth",
+        "request_body": {
+          "idToken": "google-id-token-here"
+        },
+        "response": {
+          "success": true,
+          "message": "Google login successful",
+          "accessToken": "jwt-token",
+          "refreshToken": "refresh-token",
+          "user": {
+            "id": "user-id",
+            "email": "user@gmail.com",
+            "firstName": "John",
+            "lastName": "Doe",
+            "role": "pet_owner",
+            "authProvider": "google",
+            "profilePicture": "google-profile-pic-url"
+          },
+          "permissions": ["read:profile", "write:pets"],
+          "isNewUser": false
+        }
+      },
+      "apple_login": {
+        "method": "POST",
+        "url": "/auth/apple",
+        "description": "Login with Apple Sign-In",
+        "request_body": {
+          "idToken": "apple-id-token-here"
+        },
+        "response": {
+          "success": true,
+          "message": "Apple login successful",
+          "accessToken": "jwt-token",
+          "refreshToken": "refresh-token",
+          "user": {
+            "id": "user-id",
+            "email": "user@icloud.com",
+            "firstName": "Apple",
+            "lastName": "User",
+            "role": "pet_owner",
+            "authProvider": "apple"
+          },
+          "permissions": ["read:profile", "write:pets"],
+          "isNewUser": true
+        }
+      }
+    },
+    "token_management": {
+      "refresh_token": {
+        "method": "POST",
+        "url": "/auth/refresh",
+        "description": "Refresh access token using refresh token",
+        "request_body": {
+          "refreshToken": "refresh-token-here"
+        },
+        "response": {
+          "success": true,
+          "accessToken": "new-jwt-token",
+          "user": {
+            "id": "user-id",
+            "email": "user@example.com",
+            "role": "pet_owner"
+          },
+          "permissions": ["read:profile", "write:pets"]
+        }
+      },
+      "logout": {
+        "method": "POST",
+        "url": "/auth/logout",
+        "description": "Logout from current session",
+        "headers": {
+          "Authorization": "Bearer jwt-token"
+        },
+        "request_body": {
+          "refreshToken": "refresh-token-here"
+        },
+        "response": {
+          "success": true,
+          "message": "Logged out successfully"
+        }
+      },
+      "logout_all": {
+        "method": "POST",
+        "url": "/auth/logout-all",
+        "description": "Logout from all sessions",
+        "headers": {
+          "Authorization": "Bearer jwt-token"
+        },
+        "response": {
+          "success": true,
+          "message": "Logged out from all sessions"
+        }
+      }
+    },
+    "profile_management": {
+      "get_profile": {
+        "method": "GET",
+        "url": "/auth/profile",
+        "description": "Get user profile information",
+        "headers": {
+          "Authorization": "Bearer jwt-token"
+        },
+        "response": {
+          "success": true,
+          "user": {
+            "id": "user-id",
+            "email": "user@example.com",
+            "phone": "+1234567890",
+            "firstName": "John",
+            "lastName": "Doe",
+            "role": "pet_owner",
+            "emailVerified": true,
+            "phoneVerified": true,
+            "profilePicture": null,
+            "authProvider": "local",
+            "petOwner": {
+              "id": "pet-owner-id",
+              "pets": []
+            }
+          }
+        }
+      }
+    },
+    "validation_rules": {
+      "identifier": "Required, valid phone number or email address",
+      "otpCode": "Required, 6-digit numeric code",
+      "deliveryMethod": "Optional, 'phone' or 'email'",
+      "idToken": "Required for OAuth, valid JWT token from provider",
+      "refreshToken": "Required for token refresh and logout"
+    },
+    "features": [
+      "Phone or email login with OTP",
+      "Google OAuth integration",
+      "Apple Sign-In integration",
+      "JWT access and refresh tokens",
+      "Session management",
+      "Rate limiting protection",
+      "Automatic account linking for OAuth",
+      "User profile with pet owner details"
+    ]
+  }
+  }
+}

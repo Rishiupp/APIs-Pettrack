@@ -1,5 +1,4 @@
 import { Request, Response } from 'express';
-import { AuthService } from '../../services/auth/auth.service';
 import { EnhancedAuthService } from '../../services/auth/enhanced-auth.service';
 import { ResponseHandler } from '../../utils/response';
 import { ValidationUtil } from '../../utils/validation';
@@ -33,10 +32,12 @@ export class AuthController {
       return ResponseHandler.validationError(res, errors);
     }
 
-    // First step: Just request OTP for registration
+    // First step: Just request OTP for registration (send to both phone and email)
     const result = await EnhancedAuthService.requestOTP(
       ValidationUtil.sanitizePhone(phone),
-      'registration'
+      'registration',
+      'both',
+      { phone: ValidationUtil.sanitizePhone(phone), email: email.toLowerCase().trim() }
     );
 
     // Store the registration data in session/temporary storage (you might want to use Redis for production)
