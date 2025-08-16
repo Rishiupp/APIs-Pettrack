@@ -252,4 +252,80 @@ export class PetsController {
     const vaccineTypes = await PetsService.getVaccineTypes();
     return ResponseHandler.success(res, vaccineTypes);
   });
+
+  static recordPetLocation = asyncHandler(async (req: Request, res: Response) => {
+    const { petId } = req.params;
+    const { petId: bodyPetId, latitude, longitude, accuracy } = req.body;
+
+    if (!petId) {
+      return ResponseHandler.error(res, 'Pet ID is required', 400);
+    }
+
+    // Validate required fields
+    const errors = ValidationUtil.validateRequired({
+      petId: bodyPetId,
+      latitude,
+      longitude,
+    });
+
+    // Validate that pet ID in body matches URL parameter
+    if (bodyPetId && bodyPetId !== petId) {
+      errors.push({
+        field: 'petId',
+        message: 'Pet ID in body must match URL parameter',
+        value: bodyPetId,
+      });
+    }
+
+    // Validate coordinates
+    if (latitude && longitude) {
+      const coordErrors = ValidationUtil.validateCoordinates(latitude, longitude);
+      errors.push(...coordErrors);
+    }
+
+    // Validate accuracy if provided
+    if (accuracy && (accuracy < 0 || accuracy > 10000)) {
+      errors.push({
+        field: 'accuracy',
+        message: 'Accuracy must be between 0 and 10000 meters',
+        value: accuracy,
+      });
+    }
+
+    if (errors.length > 0) {
+      return ResponseHandler.validationError(res, errors);
+    }
+
+    const locationEvent = await PetsService.recordPetLocation(
+      petId,
+      latitude,
+      longitude,
+      accuracy,
+      req
+    );
+    
+    return ResponseHandler.success(res, locationEvent, 'Location recorded successfully');
+  });
+
+  static getPetLocations = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { petId } = req.params;
+    const { page, limit } = req.query;
+    const userId = req.user!.id;
+
+    const { page: validPage, limit: validLimit, errors } = ValidationUtil.validatePagination(
+      page ? parseInt(page as string) : undefined,
+      limit ? parseInt(limit as string) : undefined
+    );
+
+    if (errors.length > 0) {
+      return ResponseHandler.validationError(res, errors);
+    }
+
+    if (!petId) {
+      return ResponseHandler.error(res, 'Pet ID is required', 400);
+    }
+
+    const result = await PetsService.getPetLocations(petId, userId, validPage, validLimit);
+    return ResponseHandler.success(res, result.locations, undefined, 200, result.meta);
+  });
 }

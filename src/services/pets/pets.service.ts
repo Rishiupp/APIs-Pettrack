@@ -407,4 +407,111 @@ export class PetsService {
 
     return vaccineTypes;
   }
+
+  static async recordPetLocation(
+    petId: string,
+    latitude: number,
+    longitude: number,
+    accuracy?: number,
+    req?: any
+  ) {
+    // Verify pet exists
+    const pet = await prisma.pet.findUnique({
+      where: { id: petId },
+    });
+
+    if (!pet) {
+      throw new AppError('Pet not found', 404);
+    }
+
+    // Extract request metadata
+    const scannerIp = req?.ip || req?.connection?.remoteAddress;
+    const userAgent = req?.headers?.['user-agent'];
+
+    // Create location event
+    const locationEvent = await prisma.petLocationEvent.create({
+      data: {
+        petId,
+        latitude,
+        longitude,
+        accuracy,
+        scannerIp,
+        userAgent,
+        // deviceType: 'mobile', // Will be set by default in schema
+      },
+      include: {
+        pet: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    return locationEvent;
+  }
+
+  static async getPetLocations(
+    petId: string,
+    userId: string,
+    page: number = 1,
+    limit: number = 20
+  ) {
+    // Verify user has access to this pet
+    const pet = await prisma.pet.findFirst({
+      where: {
+        id: petId,
+        owner: {
+          userId,
+        },
+      },
+    });
+
+    if (!pet) {
+      throw new AppError('Pet not found or access denied', 404);
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [locations, totalCount] = await Promise.all([
+      prisma.petLocationEvent.findMany({
+        where: { petId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          latitude: true,
+          longitude: true,
+          accuracy: true,
+          locationName: true,
+          city: true,
+          state: true,
+          countryCode: true,
+          createdAt: true,
+        },
+      }),
+      prisma.petLocationEvent.count({
+        where: { petId },
+      }),
+    ]);
+
+    const totalPages = Math.ceil(totalCount / limit);
+
+    const meta: PaginationMeta = {
+      page,
+      limit,
+      total: totalCount,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+    };
+
+    return {
+      locations,
+      meta,
+    };
+  }
 }

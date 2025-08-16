@@ -21,4 +21,8 @@ router.delete('/:petId', requireAuthenticated, PetsController.deletePet);
 router.post('/:petId/vaccinations', requireAuthenticated, PetsController.addVaccinations);
 router.get('/:petId/vaccinations', requireAuthenticated, PetsController.getVaccinations);
 
+// Location tracking
+router.post('/:petId/location', PetsController.recordPetLocation);
+router.get('/:petId/locations', requireAuthenticated, PetsController.getPetLocations);
+
 export default router;

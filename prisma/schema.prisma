@@ -357,6 +357,7 @@ model Pet {
   paymentEvents      PaymentEvent[]
   notifications      Notification[]
   supportTickets     SupportTicket[]
+  locationEvents     PetLocationEvent[]
 
   @@map("pets")
 }
@@ -472,6 +473,28 @@ model QRScanEvent {
   qrCode QRCode @relation(fields: [qrId], references: [id])
 
   @@map("qr_scan_events")
+}
+
+model PetLocationEvent {
+  id               String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  petId            String      @map("pet_id") @db.Uuid
+  latitude         Decimal     @db.Decimal(10, 8)
+  longitude        Decimal     @db.Decimal(11, 8)
+  accuracy         Decimal?    @db.Decimal(8, 2)
+  scannerIp        String?     @map("scanner_ip") @db.Inet
+  userAgent        String?     @map("user_agent")
+  deviceType       DeviceType? @default(mobile) @map("device_type")
+  locationName     String?     @map("location_name") @db.VarChar(255)
+  countryCode      String?     @map("country_code") @db.Char(2)
+  city             String?     @db.VarChar(100)
+  state            String?     @db.VarChar(100)
+  scannerContactInfo Json?     @map("scanner_contact_info")
+  createdAt        DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  pet Pet @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@map("pet_location_events")
 }
 
 // Payment Integration (Razorpay)
