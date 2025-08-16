@@ -307,6 +307,51 @@ export class PetsController {
     return ResponseHandler.success(res, locationEvent, 'Location recorded successfully');
   });
 
+  static recordPublicPetLocation = asyncHandler(async (req: Request, res: Response) => {
+    const { petId } = req.params;
+    const { latitude, longitude, accuracy, reporterInfo } = req.body;
+
+    if (!petId) {
+      return ResponseHandler.error(res, 'Pet ID is required', 400);
+    }
+
+    // Validate required fields
+    const errors = ValidationUtil.validateRequired({
+      latitude,
+      longitude,
+    });
+
+    // Validate coordinates
+    if (latitude && longitude) {
+      const coordErrors = ValidationUtil.validateCoordinates(latitude, longitude);
+      errors.push(...coordErrors);
+    }
+
+    // Validate accuracy if provided
+    if (accuracy && (accuracy < 0 || accuracy > 10000)) {
+      errors.push({
+        field: 'accuracy',
+        message: 'Accuracy must be between 0 and 10000 meters',
+        value: accuracy,
+      });
+    }
+
+    if (errors.length > 0) {
+      return ResponseHandler.validationError(res, errors);
+    }
+
+    const locationEvent = await PetsService.recordPublicPetLocation(
+      petId,
+      latitude,
+      longitude,
+      accuracy,
+      reporterInfo,
+      req
+    );
+    
+    return ResponseHandler.success(res, locationEvent, 'Location reported successfully');
+  });
+
   static getPetLocations = asyncHandler(async (req: AuthRequest, res: Response) => {
     const { petId } = req.params;
     const { page, limit } = req.query;

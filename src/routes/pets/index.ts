@@ -5,7 +5,10 @@ import { requireAuthenticated } from '../../middleware/auth/authorize';
 
 const router = Router();
 
-// All pet routes require authentication
+// Public routes (no authentication required)
+router.post('/:petId/public-location', PetsController.recordPublicPetLocation);
+
+// All other pet routes require authentication
 router.use(authenticate);
 
 // Pet CRUD operations

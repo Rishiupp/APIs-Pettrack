@@ -373,7 +373,7 @@ export class PetsService {
   static async getPetVaccinations(petId: string, userId?: string) {
     // Check access
     if (userId) {
-      const pet = await this.getPetById(petId, userId);
+      await this.getPetById(petId, userId);
     }
 
     const vaccinations = await prisma.vaccinationRecord.findMany({
@@ -449,6 +449,91 @@ export class PetsService {
         },
       },
     });
+
+    return locationEvent;
+  }
+
+  static async recordPublicPetLocation(
+    petId: string,
+    latitude: number,
+    longitude: number,
+    accuracy?: number,
+    reporterInfo?: any,
+    req?: any
+  ) {
+    // Verify pet exists
+    const pet = await prisma.pet.findUnique({
+      where: { id: petId },
+      include: {
+        owner: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                phone: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!pet) {
+      throw new AppError('Pet not found', 404);
+    }
+
+    // Extract request metadata
+    const scannerIp = req?.ip || req?.connection?.remoteAddress;
+    const userAgent = req?.headers?.['user-agent'];
+
+    // Create location event
+    const locationEvent = await prisma.petLocationEvent.create({
+      data: {
+        petId,
+        latitude,
+        longitude,
+        accuracy,
+        scannerIp,
+        userAgent,
+        // Store reporter info in scannerContactInfo if provided
+        scannerContactInfo: reporterInfo || null,
+      },
+      include: {
+        pet: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    // Send notification to pet owner about location report
+    try {
+      const notificationService = await import('../notifications/notification.service');
+      await notificationService.NotificationService.createNotification({
+        userId: pet.owner.user.id,
+        petId: pet.id,
+        type: 'location_report' as any,
+        title: 'Pet Location Reported',
+        message: `Someone has reported seeing your pet ${pet.name} at a new location.`,
+        channels: ['push'],
+        metadata: {
+          petId: pet.id,
+          petName: pet.name,
+          latitude,
+          longitude,
+          reporterInfo: reporterInfo || null,
+        }
+      });
+    } catch (error) {
+      // Log error but don't fail the request
+      console.error('Failed to send location notification:', error);
+    }
 
     return locationEvent;
   }
