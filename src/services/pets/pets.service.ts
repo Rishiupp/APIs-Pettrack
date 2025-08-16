@@ -512,28 +512,8 @@ export class PetsService {
       },
     });
 
-    // Send notification to pet owner about location report
-    try {
-      const notificationService = await import('../notifications/notification.service');
-      await notificationService.NotificationService.createNotification({
-        userId: pet.owner.user.id,
-        petId: pet.id,
-        type: 'location_report' as any,
-        title: 'Pet Location Reported',
-        message: `Someone has reported seeing your pet ${pet.name} at a new location.`,
-        channels: ['push'],
-        metadata: {
-          petId: pet.id,
-          petName: pet.name,
-          latitude,
-          longitude,
-          reporterInfo: reporterInfo || null,
-        }
-      });
-    } catch (error) {
-      // Log error but don't fail the request
-      console.error('Failed to send location notification:', error);
-    }
+    // Note: Notification creation temporarily disabled
+    // TODO: Fix NotificationType enum and re-enable notifications
 
     return locationEvent;
   }
