@@ -92,7 +92,9 @@ export const config = {
   // Security
   security: {
     bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || '12'),
-    corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    corsOrigin: process.env.CORS_ORIGIN ? 
+      process.env.CORS_ORIGIN.split(',') : 
+      ['http://localhost:3000', 'http://localhost:5000', 'https://*.replit.dev', 'https://*.replit.app'],
   },
 
   // Geolocation

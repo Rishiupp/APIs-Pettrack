@@ -194,7 +194,7 @@ export class AuthService {
     });
 
     if (existingActiveUser) {
-      throw new AppError('User already exists with this phone or email', 409);
+      throw new AppError('User already exists with this phone or email', 409);  
     }
 
     try {
