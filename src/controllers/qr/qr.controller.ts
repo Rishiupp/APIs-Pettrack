@@ -159,4 +159,26 @@ export class QRController {
       return ResponseHandler.error(res, error.message, statusCode);
     }
   });
+
+  static getLatestScansForAllUserPets = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { limit = 10 } = req.query;
+    const userId = req.user!.id;
+    const limitNum = parseInt(limit as string);
+
+    // Validate limit parameter
+    if (limitNum < 1 || limitNum > 50) {
+      return ResponseHandler.validationError(res, [{
+        field: 'limit',
+        message: 'Limit must be between 1 and 50',
+        value: limitNum,
+      }]);
+    }
+
+    try {
+      const latestScans = await QRService.getLatestScansForAllUserPets(userId, limitNum);
+      return ResponseHandler.success(res, latestScans);
+    } catch (error: any) {
+      return ResponseHandler.error(res, error.message, 500);
+    }
+  });
 }

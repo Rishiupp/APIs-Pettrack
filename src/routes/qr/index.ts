@@ -16,6 +16,9 @@ router.use(authenticate);
 // Get available QR codes (for assignment)
 router.get('/available', requireExecutive, QRController.getAvailableQRCodes);
 
+// Get latest QR scans across all user's pets
+router.get('/my-pets/latest-scans', requireAuthenticated, QRController.getLatestScansForAllUserPets);
+
 // Pet-specific QR operations
 router.post('/pets/:petId/assign', requireAuthenticated, QRController.assignQRToPet);
 router.get('/pets/:petId/codes', requireAuthenticated, QRController.getPetQRCodes);

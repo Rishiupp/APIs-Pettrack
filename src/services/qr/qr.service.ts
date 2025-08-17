@@ -470,4 +470,94 @@ export class QRService {
 
     return locationsWithCoordinates;
   }
+
+  static async getLatestScansForAllUserPets(userId: string, limit: number = 10) {
+    // Get all pets owned by the user
+    const userPets = await prisma.pet.findMany({
+      where: {
+        owner: {
+          userId,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    if (userPets.length === 0) {
+      return [];
+    }
+
+    const petIds = userPets.map(pet => pet.id);
+
+    // Get latest QR scans for all user's pets
+    const latestScans = await prisma.qRScanEvent.findMany({
+      where: {
+        qrCode: {
+          assignedToPet: {
+            in: petIds,
+          },
+        },
+        scanLocation: {
+          not: null,
+        },
+        scanResult: 'success',
+      },
+      orderBy: { scanTimestamp: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        scanLocation: true,
+        locationAccuracy: true,
+        locationName: true,
+        city: true,
+        countryCode: true,
+        scanTimestamp: true,
+        deviceType: true,
+        qrCode: {
+          select: {
+            assignedToPet: true,
+            pet: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Transform the data similar to getPetScanLocations
+    const scanLocations = latestScans.map(scan => {
+      let latitude = null;
+      let longitude = null;
+
+      if (scan.scanLocation) {
+        const match = scan.scanLocation.match(/POINT\(([^)]+)\)/);
+        if (match && match[1]) {
+          const [lng, lat] = match[1].split(' ').map(Number);
+          longitude = lng;
+          latitude = lat;
+        }
+      }
+
+      return {
+        id: scan.id,
+        latitude,
+        longitude,
+        accuracy: scan.locationAccuracy ? Number(scan.locationAccuracy) : null,
+        locationName: scan.locationName,
+        city: scan.city,
+        countryCode: scan.countryCode,
+        timestamp: scan.scanTimestamp,
+        deviceType: scan.deviceType,
+        petId: scan.qrCode.assignedToPet,
+        petName: scan.qrCode.pet?.name || 'Unknown Pet',
+      };
+    }).filter(location => location.latitude && location.longitude);
+
+    return scanLocations;
+  }
 }

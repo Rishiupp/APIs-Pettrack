@@ -7,6 +7,8 @@ import {
   ScrollView,
   RefreshControl,
   Alert,
+  Linking,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import PetLocationMap from '../components/PetLocationMap';
@@ -42,25 +44,57 @@ const PetLocationScreen = ({ route, navigation }) => {
   const fetchScanLocations = async () => {
     try {
       const token = await getToken();
-      const response = await fetch(`${API_BASE_URL}/api/v1/qr/pets/${petId}/locations`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
       
-      if (data.success) {
-        setLocations(data.data || []);
+      // Fetch both QR scan locations and general pet locations
+      const [scanResponse, locationResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/v1/qr/pets/${petId}/locations`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }),
+        fetch(`${API_BASE_URL}/api/v1/pets/${petId}/locations`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        })
+      ]);
+
+      const [scanData, locationData] = await Promise.all([
+        scanResponse.ok ? scanResponse.json() : { success: false, data: [] },
+        locationResponse.ok ? locationResponse.json() : { success: false, data: [] }
+      ]);
+      
+      // Combine both types of locations
+      const allLocations = [];
+      
+      if (scanData.success && scanData.data) {
+        scanData.data.forEach(location => {
+          allLocations.push({
+            ...location,
+            type: 'scan',
+            timestamp: location.timestamp || location.createdAt
+          });
+        });
       }
+      
+      if (locationData.success && locationData.data) {
+        locationData.data.forEach(location => {
+          allLocations.push({
+            ...location,
+            type: 'location',
+            timestamp: location.createdAt
+          });
+        });
+      }
+      
+      // Sort by timestamp (newest first)
+      allLocations.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      setLocations(allLocations);
     } catch (error) {
-      console.error('Error fetching scan locations:', error);
-      Alert.alert('Error', 'Failed to fetch scan locations');
+      console.error('Error fetching locations:', error);
+      Alert.alert('Error', 'Failed to fetch locations');
     }
   };
 
@@ -92,6 +126,47 @@ const PetLocationScreen = ({ route, navigation }) => {
     }
   };
 
+  const openInMaps = (latitude, longitude, locationName = 'Pet Location') => {
+    const coordinates = `${latitude},${longitude}`;
+    const label = encodeURIComponent(locationName);
+    
+    Alert.alert(
+      'Open in Maps',
+      'Choose your preferred map application',
+      [
+        {
+          text: 'Google Maps',
+          onPress: () => {
+            const url = Platform.select({
+              ios: `comgooglemaps://?q=${coordinates}&center=${coordinates}&zoom=15`,
+              android: `geo:${coordinates}?q=${coordinates}(${label})`,
+            });
+            const fallbackUrl = `https://www.google.com/maps/search/?api=1&query=${coordinates}`;
+            
+            Linking.canOpenURL(url).then(supported => {
+              if (supported) {
+                Linking.openURL(url);
+              } else {
+                Linking.openURL(fallbackUrl);
+              }
+            });
+          }
+        },
+        {
+          text: 'Apple Maps',
+          onPress: () => {
+            const url = `http://maps.apple.com/?q=${label}&ll=${coordinates}&z=15`;
+            Linking.openURL(url);
+          }
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        }
+      ]
+    );
+  };
+
   const renderLocationsList = () => (
     <ScrollView
       style={styles.listContainer}
@@ -108,60 +183,90 @@ const PetLocationScreen = ({ route, navigation }) => {
           </Text>
         </View>
       ) : (
-        locations.map((location, index) => (
-          <View key={location.id} style={styles.locationItem}>
-            <View style={styles.locationHeader}>
-              <View style={styles.locationIcon}>
-                <Ionicons 
-                  name="location" 
-                  size={20} 
-                  color={index === 0 ? "#FF4444" : "#007AFF"} 
-                />
-              </View>
-              <View style={styles.locationInfo}>
-                <Text style={styles.locationTitle}>
-                  Scan #{locations.length - index}
-                  {index === 0 && <Text style={styles.latestBadge}> • Latest</Text>}
-                </Text>
-                <Text style={styles.locationTime}>
-                  {formatDateTime(location.timestamp)}
-                </Text>
-              </View>
-            </View>
-            
-            <View style={styles.locationDetails}>
-              <View style={styles.detailRow}>
-                <Ionicons name="pin-outline" size={16} color="#666" />
-                <Text style={styles.detailText}>
-                  {location.city || 'Unknown location'}
-                </Text>
-              </View>
-              
-              <View style={styles.detailRow}>
-                <Ionicons name="time-outline" size={16} color="#666" />
-                <Text style={styles.detailText}>
-                  {new Date(location.timestamp).toLocaleString()}
-                </Text>
-              </View>
-              
-              <View style={styles.detailRow}>
-                <Ionicons name="phone-portrait-outline" size={16} color="#666" />
-                <Text style={styles.detailText}>
-                  {location.deviceType || 'Unknown device'}
-                </Text>
-              </View>
-
-              {location.accuracy && (
-                <View style={styles.detailRow}>
-                  <Ionicons name="radio-outline" size={16} color="#666" />
-                  <Text style={styles.detailText}>
-                    ±{Math.round(location.accuracy)}m accuracy
+        locations.map((location, index) => {
+          const isLocationReport = location.type === 'location';
+          const iconColor = index === 0 ? "#FF4444" : (isLocationReport ? "#FF9500" : "#007AFF");
+          const typeCount = isLocationReport ? 
+            locations.filter(l => l.type === 'location').indexOf(location) + 1 :
+            locations.filter(l => l.type === 'scan').indexOf(location) + 1;
+          
+          return (
+            <View key={location.id} style={styles.locationItem}>
+              <View style={styles.locationHeader}>
+                <View style={styles.locationIcon}>
+                  <Ionicons 
+                    name={isLocationReport ? "location" : "qr-code"} 
+                    size={20} 
+                    color={iconColor} 
+                  />
+                </View>
+                <View style={styles.locationInfo}>
+                  <Text style={styles.locationTitle}>
+                    {isLocationReport ? `Location Report #${typeCount}` : `QR Scan #${typeCount}`}
+                    {index === 0 && <Text style={styles.latestBadge}> • Latest</Text>}
+                  </Text>
+                  <Text style={styles.locationTime}>
+                    {formatDateTime(location.timestamp)}
+                  </Text>
+                  <Text style={[styles.locationTypeText, { color: iconColor }]}>
+                    {isLocationReport ? '📍 Reported by finder' : '📱 QR code scanned'}
                   </Text>
                 </View>
-              )}
+                <TouchableOpacity
+                  style={styles.mapButtonSmall}
+                  onPress={() => openInMaps(
+                    location.latitude,
+                    location.longitude,
+                    isLocationReport ? 'Pet Location Report' : 'Pet QR Scan'
+                  )}
+                >
+                  <Ionicons name="map" size={16} color="#007AFF" />
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.locationDetails}>
+                <View style={styles.detailRow}>
+                  <Ionicons name="pin-outline" size={16} color="#666" />
+                  <Text style={styles.detailText}>
+                    {location.city || location.locationName || 'Unknown location'}
+                  </Text>
+                </View>
+                
+                <View style={styles.detailRow}>
+                  <Ionicons name="time-outline" size={16} color="#666" />
+                  <Text style={styles.detailText}>
+                    {new Date(location.timestamp).toLocaleString()}
+                  </Text>
+                </View>
+                
+                {location.deviceType && (
+                  <View style={styles.detailRow}>
+                    <Ionicons name="phone-portrait-outline" size={16} color="#666" />
+                    <Text style={styles.detailText}>
+                      {location.deviceType}
+                    </Text>
+                  </View>
+                )}
+
+                {location.accuracy && (
+                  <View style={styles.detailRow}>
+                    <Ionicons name="radio-outline" size={16} color="#666" />
+                    <Text style={styles.detailText}>
+                      ±{Math.round(location.accuracy)}m accuracy
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.detailRow}>
+                  <Ionicons name="navigate-outline" size={16} color="#666" />
+                  <Text style={styles.detailText}>
+                    {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+                  </Text>
+                </View>
+              </View>
             </View>
-          </View>
-        ))
+          );
+        })
       )}
     </ScrollView>
   );
