@@ -25,7 +25,30 @@ const app = express();
 // Security middleware
 app.use(helmet());
 app.use(cors({
-  origin: config.security.corsOrigin,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin matches configured origins
+    const allowedOrigins = config.security.corsOrigin;
+    
+    // Check for exact matches first
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Check for replit.dev and replit.app domains
+    if (origin.includes('.replit.dev') || origin.includes('.replit.app')) {
+      return callback(null, true);
+    }
+    
+    // Allow localhost for development
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
 }));
 
