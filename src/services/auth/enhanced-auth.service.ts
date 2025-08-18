@@ -316,16 +316,28 @@ export class EnhancedAuthService {
         data: { isUsed: true },
       });
 
+      // Determine which field to verify based on the delivery method of the used OTP
+      const updateData: any = {
+        email: email.toLowerCase(),
+        firstName,
+        lastName,
+        isActive: true,
+      };
+
+      // Mark the corresponding field as verified based on delivery method
+      if (validOTP.deliveryMethod === 'phone') {
+        updateData.phoneVerified = true;
+      } else if (validOTP.deliveryMethod === 'email') {
+        updateData.emailVerified = true;
+      } else {
+        // If deliveryMethod is null or undefined, default to phone verification for backward compatibility
+        updateData.phoneVerified = true;
+      }
+
       // Update user with complete registration details and activate
       user = await prisma.user.update({
         where: { id: user.id },
-        data: {
-          email: email.toLowerCase(),
-          firstName,
-          lastName,
-          phoneVerified: true,
-          isActive: true,
-        },
+        data: updateData,
       });
 
       // Create pet owner profile

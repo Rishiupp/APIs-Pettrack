@@ -162,8 +162,8 @@ export interface TicketMessage {
 export interface PetRegistration {
   name: string;
   speciesId?: number;
-  breedId?: number;
-  secondaryBreedId?: number;
+  breed?: string;
+  secondaryBreed?: string;
   gender: 'male' | 'female' | 'unknown';
   birthDate?: string;
   color?: string;
@@ -171,7 +171,6 @@ export interface PetRegistration {
   height?: number;
   distinctiveMarks?: string;
   isSpayedNeutered?: boolean;
-  microchipId?: string;
   specialNeeds?: string;
   behavioralNotes?: string;
   vaccinations?: VaccinationInput[];

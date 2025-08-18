@@ -8,8 +8,8 @@ export class PetsService {
     const {
       name,
       speciesId,
-      breedId,
-      secondaryBreedId,
+      breed,
+      secondaryBreed,
       gender,
       birthDate,
       color,
@@ -17,7 +17,6 @@ export class PetsService {
       height,
       distinctiveMarks,
       isSpayedNeutered,
-      microchipId,
       specialNeeds,
       behavioralNotes,
       vaccinations = [],
@@ -38,29 +37,7 @@ export class PetsService {
       }
     }
 
-    if (breedId) {
-      const breedIdInt = parseInt(breedId.toString(), 10);
-      if (isNaN(breedIdInt)) {
-        throw new AppError('Invalid breed ID format', 400);
-      }
-      
-      const breed = await prisma.petBreed.findUnique({
-        where: { id: breedIdInt },
-      });
-      if (!breed) {
-        throw new AppError('Invalid breed ID', 400);
-      }
-    }
 
-    // Check if microchip ID is unique
-    if (microchipId) {
-      const existingPet = await prisma.pet.findUnique({
-        where: { microchipId },
-      });
-      if (existingPet) {
-        throw new AppError('Microchip ID already exists', 409);
-      }
-    }
 
     // Create pet
     const pet = await prisma.pet.create({
@@ -69,8 +46,8 @@ export class PetsService {
         registeredBy,
         name,
         speciesId: speciesId ? parseInt(speciesId.toString(), 10) : null,
-        breedId: breedId ? parseInt(breedId.toString(), 10) : null,
-        secondaryBreedId: secondaryBreedId ? parseInt(secondaryBreedId.toString(), 10) : null,
+        breed,
+        secondaryBreed,
         gender: gender as Gender,
         birthDate: birthDate ? new Date(birthDate) : null,
         color,
@@ -78,14 +55,11 @@ export class PetsService {
         heightCm: height,
         distinctiveMarks,
         isSpayedNeutered,
-        microchipId,
         specialNeeds,
         behavioralNotes,
       },
       include: {
         species: true,
-        breed: true,
-        secondaryBreed: true,
         owner: {
           include: {
             user: {
@@ -126,8 +100,6 @@ export class PetsService {
         where,
         include: {
           species: true,
-          breed: true,
-          secondaryBreed: true,
           qrCodes: {
             where: { status: 'active' },
             select: {
@@ -182,8 +154,6 @@ export class PetsService {
           },
         },
         species: true,
-        breed: true,
-        secondaryBreed: true,
         qrCodes: {
           select: {
             id: true,
@@ -249,23 +219,14 @@ export class PetsService {
       }
     }
 
-    // Validate microchip ID if being updated
-    if (updateData.microchipId && updateData.microchipId !== pet.microchipId) {
-      const existingPet = await prisma.pet.findUnique({
-        where: { microchipId: updateData.microchipId },
-      });
-      if (existingPet) {
-        throw new AppError('Microchip ID already exists', 409);
-      }
-    }
 
     const updatedPet = await prisma.pet.update({
       where: { id: petId },
       data: {
         ...(updateData.name && { name: updateData.name }),
         ...(updateData.speciesId && { speciesId: parseInt(updateData.speciesId.toString(), 10) }),
-        ...(updateData.breedId && { breedId: parseInt(updateData.breedId.toString(), 10) }),
-        ...(updateData.secondaryBreedId && { secondaryBreedId: parseInt(updateData.secondaryBreedId.toString(), 10) }),
+        ...(updateData.breed && { breed: updateData.breed }),
+        ...(updateData.secondaryBreed && { secondaryBreed: updateData.secondaryBreed }),
         ...(updateData.gender && { gender: updateData.gender as Gender }),
         ...(updateData.birthDate && { birthDate: new Date(updateData.birthDate) }),
         ...(updateData.color && { color: updateData.color }),
@@ -273,14 +234,11 @@ export class PetsService {
         ...(updateData.height && { heightCm: updateData.height }),
         ...(updateData.distinctiveMarks !== undefined && { distinctiveMarks: updateData.distinctiveMarks }),
         ...(updateData.isSpayedNeutered !== undefined && { isSpayedNeutered: updateData.isSpayedNeutered }),
-        ...(updateData.microchipId !== undefined && { microchipId: updateData.microchipId }),
         ...(updateData.specialNeeds !== undefined && { specialNeeds: updateData.specialNeeds }),
         ...(updateData.behavioralNotes !== undefined && { behavioralNotes: updateData.behavioralNotes }),
       },
       include: {
         species: true,
-        breed: true,
-        secondaryBreed: true,
         owner: {
           include: {
             user: {

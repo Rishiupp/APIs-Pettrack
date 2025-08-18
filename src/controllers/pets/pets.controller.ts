@@ -53,14 +53,6 @@ export class PetsController {
       });
     }
 
-    // Validate microchip if provided
-    if (petData.microchipId && !ValidationUtil.isValidMicrochip(petData.microchipId)) {
-      errors.push({
-        field: 'microchipId',
-        message: 'Invalid microchip ID format',
-        value: petData.microchipId,
-      });
-    }
 
     if (errors.length > 0) {
       return ResponseHandler.validationError(res, errors);
@@ -147,14 +139,6 @@ export class PetsController {
       });
     }
 
-    // Validate microchip if provided
-    if (updateData.microchipId && !ValidationUtil.isValidMicrochip(updateData.microchipId)) {
-      errors.push({
-        field: 'microchipId',
-        message: 'Invalid microchip ID format',
-        value: updateData.microchipId,
-      });
-    }
 
     if (errors.length > 0) {
       return ResponseHandler.validationError(res, errors);

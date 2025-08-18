@@ -17,11 +17,6 @@ export class ValidationUtil {
     return otpRegex.test(otp);
   }
 
-  static isValidMicrochip(microchipId: string): boolean {
-    // ISO 11784/11785 standard: 15 digits
-    const microchipRegex = /^\d{15}$/;
-    return microchipRegex.test(microchipId);
-  }
 
   static isValidPostalCode(postalCode: string, countryCode: string = 'IN'): boolean {
     if (countryCode === 'IN') {
