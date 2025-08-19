@@ -88,8 +88,8 @@ export class ExecutiveService {
           registeredBy: executiveId,
           name: ValidationUtil.sanitizeString(petDetails.name),
           speciesId: petDetails.speciesId,
-          breedId: petDetails.breedId,
-          secondaryBreedId: petDetails.secondaryBreedId,
+          breed: petDetails.breed,
+          secondaryBreed: petDetails.secondaryBreed,
           gender: petDetails.gender as Gender,
           birthDate: petDetails.birthDate ? new Date(petDetails.birthDate) : null,
           color: petDetails.color,
@@ -97,14 +97,11 @@ export class ExecutiveService {
           heightCm: petDetails.height,
           distinctiveMarks: petDetails.distinctiveMarks,
           isSpayedNeutered: petDetails.isSpayedNeutered,
-          microchipId: petDetails.microchipId,
           specialNeeds: petDetails.specialNeeds,
           behavioralNotes: petDetails.behavioralNotes,
         },
         include: {
           species: true,
-          breed: true,
-          secondaryBreed: true,
         },
       });
 
@@ -191,7 +188,6 @@ export class ExecutiveService {
             },
           },
           species: true,
-          breed: true,
           qrCodes: {
             select: {
               id: true,
@@ -370,7 +366,6 @@ export class ExecutiveService {
           },
         },
         species: true,
-        breed: true,
         paymentEvents: {
           select: {
             amount: true,

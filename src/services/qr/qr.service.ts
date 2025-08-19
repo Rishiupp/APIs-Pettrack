@@ -172,7 +172,6 @@ export class QRService {
               },
             },
             species: true,
-            breed: true,
           },
         },
       },
