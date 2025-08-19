@@ -22,6 +22,24 @@ export class PetsService {
       vaccinations = [],
     } = petData;
 
+    // Convert breed names to breed IDs
+    let breedId = null;
+    let secondaryBreedId = null;
+
+    if (breed) {
+      const breedRecord = await prisma.petBreed.findFirst({
+        where: { breedName: breed },
+      });
+      breedId = breedRecord?.id || null;
+    }
+
+    if (secondaryBreed) {
+      const secondaryBreedRecord = await prisma.petBreed.findFirst({
+        where: { breedName: secondaryBreed },
+      });
+      secondaryBreedId = secondaryBreedRecord?.id || null;
+    }
+
     // Validate species and breed if provided
     if (speciesId) {
       const speciesIdInt = parseInt(speciesId.toString(), 10);
@@ -46,8 +64,8 @@ export class PetsService {
         registeredBy,
         name,
         speciesId: speciesId ? parseInt(speciesId.toString(), 10) : null,
-        breed,
-        secondaryBreed,
+        breed_id: breedId,
+        secondary_breed_id: secondaryBreedId,
         gender: gender as Gender,
         birthDate: birthDate ? new Date(birthDate) : null,
         color,
@@ -60,6 +78,8 @@ export class PetsService {
       },
       include: {
         species: true,
+        pet_breeds_pets_breed_idTopet_breeds: true,
+        pet_breeds_pets_secondary_breed_idTopet_breeds: true,
         owner: {
           include: {
             user: {
@@ -100,6 +120,8 @@ export class PetsService {
         where,
         include: {
           species: true,
+          pet_breeds_pets_breed_idTopet_breeds: true,
+          pet_breeds_pets_secondary_breed_idTopet_breeds: true,
           qrCodes: {
             where: { status: 'active' },
             select: {
@@ -154,6 +176,8 @@ export class PetsService {
           },
         },
         species: true,
+        pet_breeds_pets_breed_idTopet_breeds: true,
+        pet_breeds_pets_secondary_breed_idTopet_breeds: true,
         qrCodes: {
           select: {
             id: true,
@@ -224,8 +248,29 @@ export class PetsService {
     
     if (updateData.name) updateFields.name = updateData.name;
     if (updateData.speciesId) updateFields.speciesId = parseInt(updateData.speciesId.toString(), 10);
-    if (updateData.breed !== undefined) updateFields.breed = updateData.breed;
-    if (updateData.secondaryBreed !== undefined) updateFields.secondaryBreed = updateData.secondaryBreed;
+    
+    // Handle breed updates
+    if (updateData.breed !== undefined) {
+      if (updateData.breed) {
+        const breedRecord = await prisma.petBreed.findFirst({
+          where: { breedName: updateData.breed },
+        });
+        updateFields.breed_id = breedRecord?.id || null;
+      } else {
+        updateFields.breed_id = null;
+      }
+    }
+    
+    if (updateData.secondaryBreed !== undefined) {
+      if (updateData.secondaryBreed) {
+        const secondaryBreedRecord = await prisma.petBreed.findFirst({
+          where: { breedName: updateData.secondaryBreed },
+        });
+        updateFields.secondary_breed_id = secondaryBreedRecord?.id || null;
+      } else {
+        updateFields.secondary_breed_id = null;
+      }
+    }
     if (updateData.gender) updateFields.gender = updateData.gender as Gender;
     if (updateData.birthDate) updateFields.birthDate = new Date(updateData.birthDate);
     if (updateData.color !== undefined) updateFields.color = updateData.color;
@@ -241,6 +286,8 @@ export class PetsService {
       data: updateFields,
       include: {
         species: true,
+        pet_breeds_pets_breed_idTopet_breeds: true,
+        pet_breeds_pets_secondary_breed_idTopet_breeds: true,
         owner: {
           include: {
             user: {

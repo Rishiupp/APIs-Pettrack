@@ -154,7 +154,8 @@ export class SupportService {
             id: true,
             name: true,
             species: true,
-            breed: true,
+            pet_breeds_pets_breed_idTopet_breeds: true,
+            pet_breeds_pets_secondary_breed_idTopet_breeds: true,
           },
         },
         assignedToUser: {

@@ -43,8 +43,6 @@ export class ExecutiveService {
           petOwner = await tx.petOwner.create({
             data: {
               userId: user.id,
-              fatherName: ownerDetails.fatherName,
-              aadhaarNumber: ownerDetails.aadhaarNumber,
               addressLine1: ownerDetails.address,
               city: ownerDetails.city,
               state: ownerDetails.state,
@@ -73,8 +71,6 @@ export class ExecutiveService {
         petOwner = await tx.petOwner.create({
           data: {
             userId: user.id,
-            fatherName: ownerDetails.fatherName,
-            aadhaarNumber: ownerDetails.aadhaarNumber,
             addressLine1: ownerDetails.address,
             city: ownerDetails.city,
             state: ownerDetails.state,
@@ -85,6 +81,24 @@ export class ExecutiveService {
         });
       }
 
+      // Convert breed names to breed IDs
+      let breedId = null;
+      let secondaryBreedId = null;
+
+      if (petDetails.breed) {
+        const breedRecord = await tx.petBreed.findFirst({
+          where: { breedName: petDetails.breed },
+        });
+        breedId = breedRecord?.id || null;
+      }
+
+      if (petDetails.secondaryBreed) {
+        const secondaryBreedRecord = await tx.petBreed.findFirst({
+          where: { breedName: petDetails.secondaryBreed },
+        });
+        secondaryBreedId = secondaryBreedRecord?.id || null;
+      }
+
       // Create pet
       const pet = await tx.pet.create({
         data: {
@@ -92,8 +106,8 @@ export class ExecutiveService {
           registeredBy: executiveId,
           name: ValidationUtil.sanitizeString(petDetails.name),
           speciesId: petDetails.speciesId,
-          breed: petDetails.breed,
-          secondaryBreed: petDetails.secondaryBreed,
+          breed_id: breedId,
+          secondary_breed_id: secondaryBreedId,
           gender: petDetails.gender as Gender,
           birthDate: petDetails.birthDate ? new Date(petDetails.birthDate) : null,
           color: petDetails.color,
@@ -106,6 +120,8 @@ export class ExecutiveService {
         },
         include: {
           species: true,
+          pet_breeds_pets_breed_idTopet_breeds: true,
+          pet_breeds_pets_secondary_breed_idTopet_breeds: true,
         },
       });
 
