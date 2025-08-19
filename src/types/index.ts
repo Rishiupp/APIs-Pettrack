@@ -191,6 +191,8 @@ export interface ExecutiveRegistration {
   ownerDetails: {
     firstName: string;
     lastName: string;
+    fatherName?: string;
+    aadhaarNumber?: string;
     phone: string;
     email: string;
     address?: string;

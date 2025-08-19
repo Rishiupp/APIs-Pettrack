@@ -43,6 +43,8 @@ export class ExecutiveService {
           petOwner = await tx.petOwner.create({
             data: {
               userId: user.id,
+              fatherName: ownerDetails.fatherName,
+              aadhaarNumber: ownerDetails.aadhaarNumber,
               addressLine1: ownerDetails.address,
               city: ownerDetails.city,
               state: ownerDetails.state,
@@ -71,6 +73,8 @@ export class ExecutiveService {
         petOwner = await tx.petOwner.create({
           data: {
             userId: user.id,
+            fatherName: ownerDetails.fatherName,
+            aadhaarNumber: ownerDetails.aadhaarNumber,
             addressLine1: ownerDetails.address,
             city: ownerDetails.city,
             state: ownerDetails.state,
