@@ -86,9 +86,8 @@ export class EnhancedAuthService {
       }
     }
 
-    // Generate OTP codes
-    const phoneOtp = CryptoUtil.generateOTP(6);
-    const emailOtp = CryptoUtil.generateOTP(6);
+    // Generate single OTP code for both delivery methods
+    const otpCode = CryptoUtil.generateOTP(6);
     const expiresAt = new Date(Date.now() + config.otp.expiryTime * 1000);
 
     let userId: string;
@@ -157,14 +156,14 @@ export class EnhancedAuthService {
     const otpCodes: { method: 'phone' | 'email'; code: string; hash: string }[] = [];
 
     if (purpose === OTPPurpose.registration) {
-      // For registration during /register endpoint (phone provided)
+      // For registration during /register endpoint - use same OTP for both methods
       if (targetUser?.phone) {
         deliveryMethods.push('phone');
-        otpCodes.push({ method: 'phone', code: phoneOtp, hash: CryptoUtil.hashOTP(phoneOtp) });
+        otpCodes.push({ method: 'phone', code: otpCode, hash: CryptoUtil.hashOTP(otpCode) });
       }
       if (targetUser?.email) {
         deliveryMethods.push('email');
-        otpCodes.push({ method: 'email', code: emailOtp, hash: CryptoUtil.hashOTP(emailOtp) });
+        otpCodes.push({ method: 'email', code: otpCode, hash: CryptoUtil.hashOTP(otpCode) });
       }
     } else {
       // For login, determine method based on identifier or deliveryMethod
@@ -173,8 +172,7 @@ export class EnhancedAuthService {
         : (isEmail ? 'email' : 'phone');
       
       deliveryMethods.push(method);
-      const code = method === 'email' ? emailOtp : phoneOtp;
-      otpCodes.push({ method, code, hash: CryptoUtil.hashOTP(code) });
+      otpCodes.push({ method, code: otpCode, hash: CryptoUtil.hashOTP(otpCode) });
     }
 
     // Store OTP codes in database
@@ -228,22 +226,29 @@ export class EnhancedAuthService {
    * Complete registration after OTP verification
    */
   static async completeRegistration(userData: {
-    phone: string;
-    email: string;
+    phone?: string;
+    email?: string;
     firstName: string;
     lastName: string;
     otpCode: string;
   }) {
     const { phone, email, firstName, lastName, otpCode } = userData;
-    const sanitizedPhone = phone.replace(/\s+/g, '');
+    
+    if (!phone && !email) {
+      throw new AppError('Either phone number or email address is required', 400);
+    }
+    
+    const sanitizedPhone = phone ? phone.replace(/\s+/g, '') : undefined;
+    const sanitizedEmail = email ? email.toLowerCase() : undefined;
 
     // Check if active user already exists (ignore inactive temp users)
+    const whereConditions = [];
+    if (sanitizedPhone) whereConditions.push({ phone: sanitizedPhone });
+    if (sanitizedEmail) whereConditions.push({ email: sanitizedEmail });
+    
     const existingActiveUser = await prisma.user.findFirst({
       where: {
-        OR: [
-          { phone: sanitizedPhone },
-          { email: email.toLowerCase() },
-        ],
+        OR: whereConditions,
         isActive: true, // Only check active users
       },
     });
@@ -253,21 +258,31 @@ export class EnhancedAuthService {
     }
 
     try {
-      // Clean up any old inactive temp users for this phone
-      await prisma.user.deleteMany({
-        where: {
-          phone: sanitizedPhone,
-          isActive: false,
-          createdAt: {
-            lt: new Date(Date.now() - 2 * 60 * 1000), // Older than 2 minutes
+      // Clean up any old inactive temp users for this phone/email
+      const cleanupConditions = [];
+      if (sanitizedPhone) cleanupConditions.push({ phone: sanitizedPhone });
+      if (sanitizedEmail) cleanupConditions.push({ email: sanitizedEmail });
+      
+      if (cleanupConditions.length > 0) {
+        await prisma.user.deleteMany({
+          where: {
+            OR: cleanupConditions,
+            isActive: false,
+            createdAt: {
+              lt: new Date(Date.now() - 2 * 60 * 1000), // Older than 2 minutes
+            },
           },
-        },
-      });
+        });
+      }
 
       // Find the most recent temporary user created during OTP request
+      const findConditions = [];
+      if (sanitizedPhone) findConditions.push({ phone: sanitizedPhone });
+      if (sanitizedEmail) findConditions.push({ email: sanitizedEmail });
+      
       let user = await prisma.user.findFirst({
         where: {
-          phone: sanitizedPhone,
+          OR: findConditions,
           isActive: false, // Find inactive temp user
         },
         orderBy: {
@@ -275,8 +290,8 @@ export class EnhancedAuthService {
         },
       });
 
-      console.log(`Debug: Looking for temp user with phone: ${sanitizedPhone}`);
-      console.log(`Debug: Found temp user:`, user ? { id: user.id, phone: user.phone, isActive: user.isActive } : 'null');
+      console.log(`Debug: Looking for temp user with phone: ${sanitizedPhone}, email: ${sanitizedEmail}`);
+      console.log(`Debug: Found temp user:`, user ? { id: user.id, phone: user.phone, email: user.email, isActive: user.isActive } : 'null');
 
       if (!user) {
         throw new AppError('Please request OTP first before registering', 400);
@@ -318,11 +333,15 @@ export class EnhancedAuthService {
 
       // Determine which field to verify based on the delivery method of the used OTP
       const updateData: any = {
-        email: email.toLowerCase(),
         firstName,
         lastName,
         isActive: true,
       };
+      
+      // Only set email if provided
+      if (sanitizedEmail) {
+        updateData.email = sanitizedEmail;
+      }
 
       // Mark the corresponding field as verified based on delivery method
       if (validOTP.deliveryMethod === 'phone') {
@@ -335,9 +354,15 @@ export class EnhancedAuthService {
       }
 
       // Update user with complete registration details and activate
+      const finalUpdateData = {
+        ...updateData,
+        phone: sanitizedPhone || user.phone,
+        email: sanitizedEmail || user.email,
+      };
+      
       user = await prisma.user.update({
         where: { id: user.id },
-        data: updateData,
+        data: finalUpdateData,
       });
 
       // Create pet owner profile

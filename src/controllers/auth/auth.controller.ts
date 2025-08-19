@@ -13,14 +13,28 @@ export class AuthController {
     
     const { phone, email, firstName, lastName } = req.body;
 
-    // Validate input
+    // Validate input - at least one of phone or email is required
     const errors = [];
     
-    const phoneError = ValidationUtil.validatePhone(phone);
-    if (phoneError) errors.push(phoneError);
+    // Check if at least one contact method is provided
+    if (!phone && !email) {
+      errors.push({
+        field: 'contact',
+        message: 'Either phone number or email address is required'
+      });
+    }
     
-    const emailError = ValidationUtil.validateEmail(email);
-    if (emailError) errors.push(emailError);
+    // Validate phone if provided
+    if (phone) {
+      const phoneError = ValidationUtil.validatePhone(phone);
+      if (phoneError) errors.push(phoneError);
+    }
+    
+    // Validate email if provided
+    if (email) {
+      const emailError = ValidationUtil.validateEmail(email);
+      if (emailError) errors.push(emailError);
+    }
 
     const requiredErrors = ValidationUtil.validateRequired({
       firstName,
@@ -32,12 +46,18 @@ export class AuthController {
       return ResponseHandler.validationError(res, errors);
     }
 
-    // First step: Just request OTP for registration (send to both phone and email)
+    // First step: Request OTP for registration (send to available contact methods)
+    const primaryIdentifier = phone ? ValidationUtil.sanitizePhone(phone) : email.toLowerCase().trim();
+    const deliveryMethod = phone && email ? 'both' : (phone ? 'phone' : 'email');
+    
     const result = await EnhancedAuthService.requestOTP(
-      ValidationUtil.sanitizePhone(phone),
+      primaryIdentifier,
       'registration',
-      'both',
-      { phone: ValidationUtil.sanitizePhone(phone), email: email.toLowerCase().trim() }
+      deliveryMethod,
+      { 
+        phone: phone ? ValidationUtil.sanitizePhone(phone) : undefined, 
+        email: email ? email.toLowerCase().trim() : undefined 
+      }
     );
 
     // Store the registration data in session/temporary storage (you might want to use Redis for production)
@@ -45,8 +65,8 @@ export class AuthController {
     return ResponseHandler.success(res, {
       ...result,
       message: 'Registration initiated. Please verify OTP to complete registration.',
-      phone: ValidationUtil.sanitizePhone(phone),
-      email: email.toLowerCase().trim(),
+      phone: phone ? ValidationUtil.sanitizePhone(phone) : undefined,
+      email: email ? email.toLowerCase().trim() : undefined,
       firstName: ValidationUtil.sanitizeString(firstName),
       lastName: ValidationUtil.sanitizeString(lastName),
     }, 'OTP sent for registration');
@@ -55,14 +75,28 @@ export class AuthController {
   static completeRegistration = asyncHandler(async (req: Request, res: Response) => {
     const { phone, email, firstName, lastName, otpCode } = req.body;
 
-    // Validate input
+    // Validate input - at least one contact method required
     const errors = [];
     
-    const phoneError = ValidationUtil.validatePhone(phone);
-    if (phoneError) errors.push(phoneError);
+    // Check if at least one contact method is provided
+    if (!phone && !email) {
+      errors.push({
+        field: 'contact',
+        message: 'Either phone number or email address is required'
+      });
+    }
     
-    const emailError = ValidationUtil.validateEmail(email);
-    if (emailError) errors.push(emailError);
+    // Validate phone if provided
+    if (phone) {
+      const phoneError = ValidationUtil.validatePhone(phone);
+      if (phoneError) errors.push(phoneError);
+    }
+    
+    // Validate email if provided
+    if (email) {
+      const emailError = ValidationUtil.validateEmail(email);
+      if (emailError) errors.push(emailError);
+    }
     
     const otpError = ValidationUtil.validateOTP(otpCode);
     if (otpError) errors.push(otpError);
@@ -78,8 +112,8 @@ export class AuthController {
     }
 
     const result = await EnhancedAuthService.completeRegistration({
-      phone: ValidationUtil.sanitizePhone(phone),
-      email: email.toLowerCase().trim(),
+      phone: phone ? ValidationUtil.sanitizePhone(phone) : undefined,
+      email: email ? email.toLowerCase().trim() : undefined,
       firstName: ValidationUtil.sanitizeString(firstName),
       lastName: ValidationUtil.sanitizeString(lastName),
       otpCode,

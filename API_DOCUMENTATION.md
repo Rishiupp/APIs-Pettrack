@@ -35,6 +35,23 @@ http://localhost:5000/auth
 }
 ```
 
+**Alternative Request Bodies (Either phone OR email required):**
+```json
+{
+  "phone": "+1234567890",
+  "firstName": "John",
+  "lastName": "Doe"
+}
+```
+
+```json
+{
+  "email": "user@example.com",
+  "firstName": "John", 
+  "lastName": "Doe"
+}
+```
+
 **Success Response (200):**
 ```json
 {
@@ -95,6 +112,25 @@ http://localhost:5000/auth
 ```json
 {
   "phone": "+1234567890",
+  "email": "user@example.com",
+  "firstName": "John",
+  "lastName": "Doe",
+  "otpCode": "123456"
+}
+```
+
+**Alternative Request Bodies (Either phone OR email required):**
+```json
+{
+  "phone": "+1234567890",
+  "firstName": "John",
+  "lastName": "Doe",
+  "otpCode": "123456"
+}
+```
+
+```json
+{
   "email": "user@example.com",
   "firstName": "John",
   "lastName": "Doe",
@@ -547,11 +583,12 @@ No Content
 ## Validation Rules
 
 ### Registration
-- **phone**: Required, valid international phone number format (E.164)
-- **email**: Required, valid email address format
+- **phone**: Optional, valid international phone number format (E.164) - required if email not provided
+- **email**: Optional, valid email address format - required if phone not provided
 - **firstName**: Required, non-empty string, max 50 characters
 - **lastName**: Required, non-empty string, max 50 characters
 - **otpCode**: Required, exactly 6 numeric digits
+- **Note**: Either phone OR email (or both) must be provided
 
 ### Login
 - **identifier**: Required, valid phone number or email address
