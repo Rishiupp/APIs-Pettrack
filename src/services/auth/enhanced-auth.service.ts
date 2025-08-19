@@ -830,7 +830,6 @@ export class EnhancedAuthService {
             pets: {
               include: {
                 species: true,
-                breed: true,
               },
             },
           },
