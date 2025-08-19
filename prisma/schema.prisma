@@ -314,8 +314,6 @@ model PetBreed {
 
   // Relations
   species          PetSpecies @relation(fields: [speciesId], references: [id])
-  pets             Pet[]      @relation("PrimaryBreed")
-  secondaryBreeds  Pet[]      @relation("SecondaryBreed")
 
   @@map("pet_breeds")
 }

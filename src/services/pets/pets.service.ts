@@ -220,23 +220,25 @@ export class PetsService {
     }
 
 
+    const updateFields: any = {};
+    
+    if (updateData.name) updateFields.name = updateData.name;
+    if (updateData.speciesId) updateFields.speciesId = parseInt(updateData.speciesId.toString(), 10);
+    if (updateData.breed !== undefined) updateFields.breed = updateData.breed;
+    if (updateData.secondaryBreed !== undefined) updateFields.secondaryBreed = updateData.secondaryBreed;
+    if (updateData.gender) updateFields.gender = updateData.gender as Gender;
+    if (updateData.birthDate) updateFields.birthDate = new Date(updateData.birthDate);
+    if (updateData.color !== undefined) updateFields.color = updateData.color;
+    if (updateData.weight !== undefined) updateFields.weightKg = updateData.weight;
+    if (updateData.height !== undefined) updateFields.heightCm = updateData.height;
+    if (updateData.distinctiveMarks !== undefined) updateFields.distinctiveMarks = updateData.distinctiveMarks;
+    if (updateData.isSpayedNeutered !== undefined) updateFields.isSpayedNeutered = updateData.isSpayedNeutered;
+    if (updateData.specialNeeds !== undefined) updateFields.specialNeeds = updateData.specialNeeds;
+    if (updateData.behavioralNotes !== undefined) updateFields.behavioralNotes = updateData.behavioralNotes;
+
     const updatedPet = await prisma.pet.update({
       where: { id: petId },
-      data: {
-        ...(updateData.name && { name: updateData.name }),
-        ...(updateData.speciesId && { speciesId: parseInt(updateData.speciesId.toString(), 10) }),
-        ...(updateData.breed && { breed: updateData.breed }),
-        ...(updateData.secondaryBreed && { secondaryBreed: updateData.secondaryBreed }),
-        ...(updateData.gender && { gender: updateData.gender as Gender }),
-        ...(updateData.birthDate && { birthDate: new Date(updateData.birthDate) }),
-        ...(updateData.color && { color: updateData.color }),
-        ...(updateData.weight && { weightKg: updateData.weight }),
-        ...(updateData.height && { heightCm: updateData.height }),
-        ...(updateData.distinctiveMarks !== undefined && { distinctiveMarks: updateData.distinctiveMarks }),
-        ...(updateData.isSpayedNeutered !== undefined && { isSpayedNeutered: updateData.isSpayedNeutered }),
-        ...(updateData.specialNeeds !== undefined && { specialNeeds: updateData.specialNeeds }),
-        ...(updateData.behavioralNotes !== undefined && { behavioralNotes: updateData.behavioralNotes }),
-      },
+      data: updateFields,
       include: {
         species: true,
         owner: {
