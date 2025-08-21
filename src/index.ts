@@ -25,7 +25,7 @@ import executiveRoutes from './routes/executive';
 const app = express();
 
 // Trust proxy for proper IP detection
-app.set('trust proxy', true);
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet());
