@@ -8,6 +8,7 @@ import { logger } from './utils/logger';
 import { errorHandler, notFoundHandler } from './middleware/error-handling';
 import { handleUploadError } from './middleware/upload';
 import { defaultRateLimit } from './middleware/rate-limiting';
+import { rawBodyMiddleware } from './middleware/raw-body';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -15,6 +16,7 @@ import petRoutes from './routes/pets';
 import petRegistrationRoutes from './routes/pet-registration';
 import qrRoutes from './routes/qr';
 import paymentRoutes from './routes/payments';
+import newPaymentRoutes from './routes/payments/new-payments';
 import notificationRoutes from './routes/notifications';
 import supportRoutes from './routes/support';
 import adminRoutes from './routes/admin';
@@ -35,8 +37,8 @@ app.use(morgan('combined'));
 // Rate limiting
 app.use(defaultRateLimit);
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
+// Body parsing middleware with raw body support for webhooks
+app.use(rawBodyMiddleware);
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Static file serving for uploads
@@ -58,6 +60,7 @@ app.use('/api/v1/pets', petRoutes);
 app.use('/api/v1/pet-registration', petRegistrationRoutes);
 app.use('/api/v1/qr', qrRoutes);
 app.use('/api/v1/payments', paymentRoutes);
+app.use('/api/v2/payments', newPaymentRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/support', supportRoutes);
 app.use('/api/v1/admin', adminRoutes);

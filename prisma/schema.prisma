@@ -30,11 +30,11 @@ model User {
   locationTracks    LocationTrack[]
   notificationPrefs NotificationPreference?
   notifications     Notification[]
+  orders            Order[]
   otpCodes          OTPCode[]
   paymentEvents     PaymentEvent[]
   petOwner          PetOwner?
   registeredPets    Pet[]                   @relation("RegisteredBy")
-  refundsInitiated  Refund[]                @relation("InitiatedBy")
   supportMessages   SupportMessage[]
   assignedTickets   SupportTicket[]         @relation("AssignedTo")
   supportTickets    SupportTicket[]
@@ -286,6 +286,113 @@ model PetLocationEvent {
   @@map("pet_location_events")
 }
 
+model Order {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  razorpayOrderId     String?   @unique @map("razorpay_order_id") @db.VarChar(50)
+  userId              String    @map("user_id") @db.Uuid
+  receipt             String?   @db.VarChar(255)
+  amountInPaise       BigInt    @map("amount_in_paise")
+  currency            String    @default("INR") @db.VarChar(3)
+  status              OrderStatus @default(created)
+  notes               Json?
+  metadata            Json?
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  expiresAt           DateTime? @map("expires_at")
+  rawOrderPayload     Json?     @map("raw_order_payload")
+  user                User      @relation(fields: [userId], references: [id])
+  payments            Payment[]
+
+  @@index([razorpayOrderId])
+  @@index([userId])
+  @@map("orders")
+}
+
+model Payment {
+  id                     String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  localOrderId           String      @map("local_order_id") @db.Uuid
+  razorpayPaymentId      String      @unique @map("razorpay_payment_id") @db.VarChar(50)
+  razorpayOrderId        String      @map("razorpay_order_id") @db.VarChar(50)
+  amountInPaise          BigInt      @map("amount_in_paise")
+  currency               String      @default("INR") @db.VarChar(3)
+  method                 String?     @db.VarChar(50)
+  status                 PaymentStatusNew @default(created)
+  captured               Boolean     @default(false)
+  capturedAt             DateTime?   @map("captured_at")
+  bank                   String?     @db.VarChar(100)
+  vpa                    String?     @db.VarChar(255)
+  card                   Json?
+  fee                    BigInt?
+  tax                    BigInt?
+  currencyConversion     Json?       @map("currency_conversion")
+  signatureValid         Boolean?    @map("signature_valid")
+  signatureVerifiedAt    DateTime?   @map("signature_verified_at")
+  verificationMethod     VerificationMethod? @map("verification_method")
+  rawPaymentPayload      Json?       @map("raw_payment_payload")
+  clientMeta             Json?       @map("client_meta")
+  createdAt              DateTime    @default(now()) @map("created_at")
+  updatedAt              DateTime    @updatedAt @map("updated_at")
+  order                  Order       @relation(fields: [localOrderId], references: [id])
+  refunds                Refund[]
+
+  @@index([razorpayPaymentId])
+  @@index([localOrderId])
+  @@index([status])
+  @@map("payments")
+}
+
+model Refund {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  razorpayRefundId  String?      @map("razorpay_refund_id") @db.VarChar(50)
+  razorpayPaymentId String       @map("razorpay_payment_id") @db.VarChar(50)
+  paymentEventId    String?      @map("payment_event_id") @db.Uuid
+  amountInPaise     BigInt       @map("amount_in_paise")
+  refundAmount      Decimal?     @map("refund_amount") @db.Decimal(15, 4)
+  reason            String?
+  initiatedBy       String?      @map("initiated_by") @db.Uuid
+  status            RefundStatus @default(processing)
+  processedAt       DateTime?    @map("processed_at")
+  rawRefundPayload  Json?        @map("raw_refund_payload")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  payment           Payment      @relation(fields: [razorpayPaymentId], references: [razorpayPaymentId])
+  paymentEvent      PaymentEvent? @relation(fields: [paymentEventId], references: [id])
+
+  @@map("refunds")
+}
+
+model WebhookEvent {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  razorpayEventId  String?   @map("razorpay_event_id") @db.VarChar(100)
+  eventType        String    @map("event_type") @db.VarChar(100)
+  rawEvent         Json      @map("raw_event")
+  headers          Json?
+  signatureValid   Boolean   @map("signature_valid")
+  receivedAt       DateTime  @default(now()) @map("received_at")
+  processedAt      DateTime? @map("processed_at")
+  processingResult Json?     @map("processing_result")
+
+  @@unique([razorpayEventId])
+  @@map("webhook_events")
+}
+
+model PaymentWebhook {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId            String?   @map("event_id") @db.VarChar(100)
+  eventType          String    @map("event_type") @db.VarChar(100)
+  entityType         String    @map("entity_type") @db.VarChar(100)
+  entityId           String    @map("entity_id") @db.VarChar(100)
+  payload            Json
+  signature          String    @db.VarChar(500)
+  signatureVerified  Boolean   @map("signature_verified")
+  processed          Boolean   @default(false)
+  processedAt        DateTime? @map("processed_at")
+  processingAttempts Int       @default(0) @map("processing_attempts")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  @@map("payment_webhooks")
+}
+
+// Keep old PaymentEvent for backward compatibility during migration
 model PaymentEvent {
   id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId            String?        @map("user_id") @db.Uuid
@@ -308,39 +415,6 @@ model PaymentEvent {
   refunds           Refund[]
 
   @@map("payment_events")
-}
-
-model PaymentWebhook {
-  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  eventId            String    @unique @map("event_id") @db.VarChar(50)
-  eventType          String    @map("event_type") @db.VarChar(50)
-  entityType         String    @map("entity_type") @db.VarChar(20)
-  entityId           String    @map("entity_id") @db.VarChar(50)
-  payload            Json
-  signature          String    @db.VarChar(500)
-  signatureVerified  Boolean   @default(false) @map("signature_verified")
-  processed          Boolean   @default(false)
-  processingAttempts Int       @default(0) @map("processing_attempts")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  processedAt        DateTime? @map("processed_at")
-
-  @@map("payment_webhooks")
-}
-
-model Refund {
-  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  paymentEventId   String       @map("payment_event_id") @db.Uuid
-  razorpayRefundId String?      @map("razorpay_refund_id") @db.VarChar(50)
-  refundAmount     Decimal      @map("refund_amount") @db.Decimal(15, 4)
-  reason           String?      @db.VarChar(200)
-  status           RefundStatus @default(initiated)
-  initiatedBy      String?      @map("initiated_by") @db.Uuid
-  createdAt        DateTime     @default(now()) @map("created_at")
-  processedAt      DateTime?    @map("processed_at")
-  initiatedByUser  User?        @relation("InitiatedBy", fields: [initiatedBy], references: [id])
-  paymentEvent     PaymentEvent @relation(fields: [paymentEventId], references: [id])
-
-  @@map("refunds")
 }
 
 model LocationTrack {
@@ -629,12 +703,35 @@ enum QRStatus {
   revoked
 }
 
+enum OrderStatus {
+  created
+  paid
+  partially_paid
+  cancelled
+  refunded
+}
+
 enum PaymentStatus {
   initiated
   processing
   success
   failed
   refunded
+}
+
+enum PaymentStatusNew {
+  created
+  authorized
+  captured
+  failed
+  refunded
+  disputed
+  canceled
+}
+
+enum VerificationMethod {
+  hmac
+  fetch_api
 }
 
 enum PaymentPurpose {

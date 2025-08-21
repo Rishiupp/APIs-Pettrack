@@ -426,7 +426,9 @@ export class RazorpayService {
     const refundRecord = await prisma.refund.create({
       data: {
         paymentEventId,
+        razorpayPaymentId: paymentEvent.razorpayPaymentId,
         razorpayRefundId: refund.id,
+        amountInPaise: BigInt(Math.round(refundAmount * 100)),
         refundAmount,
         reason,
         initiatedBy,
