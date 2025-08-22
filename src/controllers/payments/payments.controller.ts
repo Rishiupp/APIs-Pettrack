@@ -53,9 +53,9 @@ export class PaymentsController {
         purpose,
       });
 
-      // Ensure the order has a valid razorpayOrderId before returning
-      if (!order || !order.razorpayOrderId) {
-        console.error('Order creation failed - no razorpayOrderId in response:', order);
+      // Ensure the order has a valid order_id before returning
+      if (!order || !order.order_id) {
+        console.error('Order creation failed - no order_id in response:', order);
         return ResponseHandler.error(res, 'Failed to create payment order - no order ID generated', 500);
       }
 

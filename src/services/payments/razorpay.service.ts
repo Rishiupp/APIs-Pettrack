@@ -100,14 +100,14 @@ export class RazorpayService {
 
       const response = {
         paymentEventId: paymentEvent.id,
-        razorpayOrderId: razorpayOrder.id,
+        order_id: razorpayOrder.id.trim(), // Use snake_case and trim any whitespace
         amount: Number(razorpayOrder.amount) / 100, // Convert back to rupees
         currency: razorpayOrder.currency,
         createdAt: razorpayOrder.created_at,
       };
 
       // Final validation - ensure all required fields are present
-      if (!response.razorpayOrderId || response.razorpayOrderId === '') {
+      if (!response.order_id || response.order_id === '') {
         console.error('Order ID validation failed - missing in response:', response);
         console.error('Original Razorpay order:', razorpayOrder);
         throw new AppError('Order ID not properly set in response', 500);
