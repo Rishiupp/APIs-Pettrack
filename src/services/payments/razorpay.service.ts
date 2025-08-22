@@ -519,4 +519,12 @@ export class RazorpayService {
 
     return refundRecord;
   }
+
+  static async getPublicConfig() {
+    this.validateRazorpayConfig();
+    
+    return {
+      key_id: config.razorpay.keyId,
+    };
+  }
 }

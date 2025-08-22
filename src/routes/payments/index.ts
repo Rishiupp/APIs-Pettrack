@@ -6,6 +6,9 @@ import { paymentRateLimit } from '../../middleware/rate-limiting';
 
 const router = Router();
 
+// Get payment configuration (no authentication required for public config)
+router.get('/config', PaymentsController.getConfig);
+
 // Create payment order (requires authentication)
 router.post('/create-order', authenticate, requireAuthenticated, paymentRateLimit, PaymentsController.createOrder);
 

@@ -178,4 +178,9 @@ export class PaymentsController {
 
     return ResponseHandler.created(res, refund, 'Refund initiated successfully');
   });
+
+  static getConfig = asyncHandler(async (req: Request, res: Response) => {
+    const config = await RazorpayService.getPublicConfig();
+    return ResponseHandler.success(res, config, 'Payment configuration retrieved successfully');
+  });
 }
