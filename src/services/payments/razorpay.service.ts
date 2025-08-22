@@ -101,6 +101,7 @@ export class RazorpayService {
       const response = {
         paymentEventId: paymentEvent.id,
         order_id: razorpayOrder.id.trim(), // Use snake_case and trim any whitespace
+        key_id: config.razorpay.keyId, // important to send
         amount: Number(razorpayOrder.amount) / 100, // Convert back to rupees
         currency: razorpayOrder.currency,
         createdAt: razorpayOrder.created_at,
