@@ -45,14 +45,36 @@ export class PaymentsController {
       return ResponseHandler.validationError(res, errors);
     }
 
-    const order = await RazorpayService.createPaymentOrder(userId, {
-      petId,
-      amount,
-      currency,
-      purpose,
-    });
+    try {
+      const order = await RazorpayService.createPaymentOrder(userId, {
+        petId,
+        amount,
+        currency,
+        purpose,
+      });
 
-    return ResponseHandler.created(res, order, 'Payment order created successfully');
+      // Ensure the order has a valid razorpayOrderId before returning
+      if (!order || !order.razorpayOrderId) {
+        console.error('Order creation failed - no razorpayOrderId in response:', order);
+        return ResponseHandler.error(res, 'Failed to create payment order - no order ID generated', 500);
+      }
+
+      return ResponseHandler.created(res, order, 'Payment order created successfully');
+    } catch (error: any) {
+      console.error('Payment order creation error:', {
+        userId,
+        petId,
+        amount,
+        purpose,
+        error: error.message,
+        stack: error.stack,
+      });
+      
+      return ResponseHandler.error(res, 
+        `Payment order creation failed: ${error.message}`, 
+        error.statusCode || 500
+      );
+    }
   });
 
   static verifyPayment = asyncHandler(async (req: AuthRequest, res: Response) => {
