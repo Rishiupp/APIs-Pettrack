@@ -49,7 +49,6 @@
     "node-apple-signin": "^1.2.2",
     "nodemailer": "^7.0.5",
     "qrcode": "^1.5.4",
-    "razorpay": "^2.9.6",
     "twilio": "^5.8.0",
     "uuid": "^11.1.0"
   },

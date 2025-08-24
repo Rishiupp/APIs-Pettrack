@@ -16,12 +16,13 @@ export const defaultRateLimit = rateLimit({
 
 // Strict rate limiting for sensitive operations
 export const strictRateLimit = rateLimit({
-  windowMs: 2 * 60 * 1000, // 2 minutes
-  max: 5, // limit each phone/identifier to 5 requests per windowMs
+  //key: value
+  windowMs: 2 * 60 * 1000, // 2 minutes   //Kitni der ki limit hai
+  max: 5, // limit each phone/identifier to 5 requests per windowMs  //kitni requests bhej sakta hai
   message: 'Too many attempts, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
+  keyGenerator: (req) => {   //this function is used to generate key for rate limiting
     // Use phone/identifier as key for rate limiting per phone number
     const identifier = req.body?.phone || req.body?.identifier;
     if (identifier) {

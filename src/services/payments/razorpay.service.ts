@@ -1,4 +1,3 @@
-import Razorpay from 'razorpay';
 import { PaymentStatus, PaymentPurpose } from '@prisma/client';
 import prisma from '../../config/database';
 import { CryptoUtil } from '../../utils/crypto';
@@ -7,33 +6,19 @@ import { config } from '../../config';
 import { PaymentOrder, PaymentVerification } from '../../types';
 
 export class RazorpayService {
-  private static razorpay: Razorpay;
-
-  // Validate Razorpay configuration and initialize
+  // Validate Razorpay configuration
   private static validateRazorpayConfig() {
     if (!config.razorpay.keyId || !config.razorpay.keySecret) {
       throw new AppError('Razorpay configuration missing - check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET environment variables', 500);
     }
   }
 
-  // Initialize Razorpay instance with validation
-  private static initializeRazorpay() {
-    if (!this.razorpay) {
-      this.validateRazorpayConfig();
-      this.razorpay = new Razorpay({
-        key_id: config.razorpay.keyId,
-        key_secret: config.razorpay.keySecret,
-      });
-    }
-    return this.razorpay;
-  }
-
   static async createPaymentOrder(userId: string, orderData: PaymentOrder) {
     const { petId, amount, currency, purpose } = orderData;
 
     try {
-      // Initialize Razorpay instance
-      const razorpayInstance = this.initializeRazorpay();
+      // Validate Razorpay configuration
+      this.validateRazorpayConfig();
 
       // Validate the order
       await this.validatePaymentOrder(userId, orderData);
@@ -47,28 +32,58 @@ export class RazorpayService {
         purpose
       });
 
-      // Create Razorpay order
-      const razorpayOrder = await razorpayInstance.orders.create({
+      // Generate unique receipt ID
+      const receipt = `receipt_${userId}_${Date.now()}`;
+
+      // Prepare request payload
+      const requestData = {
         amount: Math.round(amount * 100), // Convert to paise
         currency: currency.toUpperCase(),
+        receipt,
+        partial_payment: true,
+        first_payment_min_amount: 230,
         notes: {
           petId,
           userId,
           purpose,
         },
+      };
+
+      // Create Basic Auth header
+      const credentials = Buffer.from(`${config.razorpay.keyId}:${config.razorpay.keySecret}`).toString('base64');
+
+      // Make HTTP request to Razorpay API
+      const response = await fetch('https://api.razorpay.com/v1/orders', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
       });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        // Handle API error response
+        console.error('Razorpay API error:', responseData);
+        throw new AppError(
+          responseData.error?.description || 'Failed to create Razorpay order',
+          response.status
+        );
+      }
 
       // Log the response from Razorpay
       console.log('Razorpay order created successfully:', {
-        orderId: razorpayOrder.id,
-        amount: razorpayOrder.amount,
-        currency: razorpayOrder.currency,
-        status: razorpayOrder.status
+        orderId: responseData.id,
+        amount: responseData.amount,
+        currency: responseData.currency,
+        status: responseData.status
       });
 
       // Ensure we got a valid order ID from Razorpay
-      if (!razorpayOrder || !razorpayOrder.id) {
-        console.error('Razorpay order creation failed - no order ID in response:', razorpayOrder);
+      if (!responseData || !responseData.id) {
+        console.error('Razorpay order creation failed - no order ID in response:', responseData);
         throw new AppError('Failed to create Razorpay order - no order ID received', 500);
       }
 
@@ -81,7 +96,7 @@ export class RazorpayService {
           currency: currency.toUpperCase(),
           paymentPurpose: purpose as PaymentPurpose,
           status: PaymentStatus.initiated,
-          razorpayOrderId: razorpayOrder.id,
+          razorpayOrderId: responseData.id,
         },
       });
 
@@ -98,24 +113,24 @@ export class RazorpayService {
         status: paymentEvent.status
       });
 
-      const response = {
+      const finalResponse = {
         paymentEventId: paymentEvent.id,
-        order_id: razorpayOrder.id.trim(), // Use snake_case and trim any whitespace
-        key_id: config.razorpay.keyId, // important to send
-        amount: Number(razorpayOrder.amount) / 100, // Convert back to rupees
-        currency: razorpayOrder.currency,
-        createdAt: razorpayOrder.created_at,
+        order_id: responseData.id.trim(),
+        key_id: config.razorpay.keyId,
+        amount: Number(responseData.amount) / 100, // Convert back to rupees
+        currency: responseData.currency,
+        createdAt: responseData.created_at,
       };
 
       // Final validation - ensure all required fields are present
-      if (!response.order_id || response.order_id === '') {
-        console.error('Order ID validation failed - missing in response:', response);
-        console.error('Original Razorpay order:', razorpayOrder);
+      if (!finalResponse.order_id || finalResponse.order_id === '') {
+        console.error('Order ID validation failed - missing in response:', finalResponse);
+        console.error('Original Razorpay order:', responseData);
         throw new AppError('Order ID not properly set in response', 500);
       }
 
-      console.log('Payment order creation completed successfully:', response);
-      return response;
+      console.log('Payment order creation completed successfully:', finalResponse);
+      return finalResponse;
     } catch (error) {
       // Log the error for debugging
       console.error('Error creating payment order:', {
@@ -166,8 +181,26 @@ export class RazorpayService {
     }
 
     // Get payment details from Razorpay
-    const razorpayInstance = this.initializeRazorpay();
-    const payment = await razorpayInstance.payments.fetch(razorpayPaymentId);
+    this.validateRazorpayConfig();
+    
+    const credentials = Buffer.from(`${config.razorpay.keyId}:${config.razorpay.keySecret}`).toString('base64');
+    const paymentResponse = await fetch(`https://api.razorpay.com/v1/payments/${razorpayPaymentId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!paymentResponse.ok) {
+      const errorData = await paymentResponse.json();
+      throw new AppError(
+        errorData.error?.description || 'Failed to fetch payment details',
+        paymentResponse.status
+      );
+    }
+
+    const payment = await paymentResponse.json();
 
     if (payment.status !== 'captured') {
       await prisma.paymentEvent.update({
@@ -494,14 +527,35 @@ export class RazorpayService {
     }
 
     // Create refund in Razorpay
-    const razorpayInstance = this.initializeRazorpay();
-    const refund = await razorpayInstance.payments.refund(paymentEvent.razorpayPaymentId, {
+    this.validateRazorpayConfig();
+    
+    const credentials = Buffer.from(`${config.razorpay.keyId}:${config.razorpay.keySecret}`).toString('base64');
+    const refundData = {
       amount: Math.round(refundAmount * 100),
       notes: {
         reason,
         initiated_by: initiatedBy,
       },
+    };
+
+    const refundResponse = await fetch(`https://api.razorpay.com/v1/payments/${paymentEvent.razorpayPaymentId}/refund`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(refundData),
     });
+
+    if (!refundResponse.ok) {
+      const errorData = await refundResponse.json();
+      throw new AppError(
+        errorData.error?.description || 'Failed to create refund',
+        refundResponse.status
+      );
+    }
+
+    const refund = await refundResponse.json();
 
     // Create refund record
     const refundRecord = await prisma.refund.create({
