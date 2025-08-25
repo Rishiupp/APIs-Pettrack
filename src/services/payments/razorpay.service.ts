@@ -62,7 +62,7 @@ export class RazorpayService {
         body: JSON.stringify(requestData),
       });
 
-      const responseData = await response.json();
+      const responseData = await response.json() as any;
 
       if (!response.ok) {
         // Handle API error response
@@ -193,14 +193,14 @@ export class RazorpayService {
     });
 
     if (!paymentResponse.ok) {
-      const errorData = await paymentResponse.json();
+      const errorData = await paymentResponse.json() as any;
       throw new AppError(
         errorData.error?.description || 'Failed to fetch payment details',
         paymentResponse.status
       );
     }
 
-    const payment = await paymentResponse.json();
+    const payment = await paymentResponse.json() as any;
 
     if (payment.status !== 'captured') {
       await prisma.paymentEvent.update({
@@ -548,14 +548,14 @@ export class RazorpayService {
     });
 
     if (!refundResponse.ok) {
-      const errorData = await refundResponse.json();
+      const errorData = await refundResponse.json() as any;
       throw new AppError(
         errorData.error?.description || 'Failed to create refund',
         refundResponse.status
       );
     }
 
-    const refund = await refundResponse.json();
+    const refund = await refundResponse.json() as any;
 
     // Create refund record
     const refundRecord = await prisma.refund.create({

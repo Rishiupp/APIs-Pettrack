@@ -1,7 +1,8 @@
-import { PetStatus, Gender } from '@prisma/client';
+import { PetStatus, Gender, NotificationType } from '@prisma/client';
 import prisma from '../../config/database';
 import { AppError } from '../../types';
 import { PaginationMeta, PetRegistration, VaccinationInput } from '../../types';
+import { NotificationService } from '../notifications/notification.service';
 
 export class PetsService {
   static async createPet(ownerId: string, petData: PetRegistration, registeredBy?: string) {
@@ -98,6 +99,27 @@ export class PetsService {
     // Add vaccination records if provided
     if (vaccinations.length > 0) {
       await this.addVaccinationRecords(pet.id, vaccinations);
+    }
+
+    // Send pet registration notification
+    try {
+      await NotificationService.createNotification({
+        userId: pet.owner.userId,
+        petId: pet.id,
+        type: NotificationType.system_alert,
+        title: `Pet Registered Successfully! 🎉`,
+        message: `Your pet ${pet.name} has been registered successfully. Registration number: ${pet.registrationNumber}`,
+        channels: ['push', 'email'],
+        metadata: {
+          petId: pet.id,
+          petName: pet.name,
+          registrationNumber: pet.registrationNumber,
+          registrationDate: pet.createdAt.toISOString(),
+        },
+      });
+    } catch (notificationError) {
+      // Log error but don't fail pet creation
+      console.error('Failed to send pet registration notification:', notificationError);
     }
 
     return pet;
