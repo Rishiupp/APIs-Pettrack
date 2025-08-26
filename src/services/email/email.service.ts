@@ -14,6 +14,12 @@ if (config.email.user && config.email.pass) {
         user: config.email.user,
         pass: config.email.pass,
       },
+      connectionTimeout: 30000, // 30 seconds
+      greetingTimeout: 15000, // 15 seconds
+      socketTimeout: 30000, // 30 seconds
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100
     });
   } catch (error) {
     console.warn('Email service initialization failed:', error);
@@ -31,22 +37,36 @@ export class EmailService {
       return false;
     }
 
-    try {
-      const mailOptions = {
-        from: `"Pet Track" <${config.email.user}>`,
-        to,
-        subject,
-        text: text || '',
-        html,
-      };
+    const mailOptions = {
+      from: `"Pet Track" <${config.email.user}>`,
+      to,
+      subject,
+      text: text || '',
+      html,
+    };
 
-      const result = await transporter.sendMail(mailOptions);
-      console.log(`Email sent successfully. Message ID: ${result.messageId}`);
-      return true;
-    } catch (error) {
-      console.error('Email sending failed:', error);
-      return false;
+    const maxRetries = 3;
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await transporter.sendMail(mailOptions);
+        console.log(`Email sent successfully. Message ID: ${result.messageId}`);
+        return true;
+      } catch (error: any) {
+        lastError = error;
+        console.warn(`Email sending attempt ${attempt}/${maxRetries} failed:`, error.message);
+        
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Exponential backoff, max 10s
+          console.log(`Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
     }
+
+    console.error('Email sending failed after all retries:', lastError);
+    return false;
   }
 
   /**
