@@ -237,33 +237,47 @@ export class NewRazorpayService {
       throw new Error(`Payment not captured. Status: ${payment.status}`);
     }
 
-    // 5. Update Order status and create Payment record
-    await prisma.order.update({
-      where: { id: local_order_id },
-      data: { status: 'paid' }
-    });
+    // 5. Update Order status and create Payment record in a transaction
+    const successPayment = await prisma.$transaction(async (tx) => {
+      try {
+        console.log(`Creating payment record for ${razorpay_payment_id} with amount ${payment.amount}`);
+        
+        // Update order status first
+        await tx.order.update({
+          where: { id: local_order_id },
+          data: { status: 'paid' }
+        });
 
-    const successPayment = await prisma.payment.create({
-      data: {
-        localOrderId: local_order_id,
-        razorpayPaymentId: razorpay_payment_id,
-        razorpayOrderId: razorpay_order_id,
-        amountInPaise: BigInt(payment.amount),
-        currency: payment.currency,
-        method: payment.method,
-        status: 'captured',
-        captured: payment.captured || false,
-        capturedAt: payment.created_at ? new Date(payment.created_at * 1000) : new Date(),
-        bank: payment.bank || undefined,
-        vpa: payment.vpa || undefined,
-        card: payment.card ? JSON.parse(JSON.stringify(payment.card)) : undefined,
-        fee: payment.fee ? BigInt(payment.fee) : undefined,
-        tax: payment.tax ? BigInt(payment.tax) : undefined,
-        signatureValid: true,
-        signatureVerifiedAt: new Date(),
-        verificationMethod: 'hmac',
-        rawPaymentPayload: JSON.parse(JSON.stringify(payment)),
-        clientMeta: client_meta || {},
+        // Create payment record
+        const paymentRecord = await tx.payment.create({
+          data: {
+            localOrderId: local_order_id,
+            razorpayPaymentId: razorpay_payment_id,
+            razorpayOrderId: razorpay_order_id,
+            amountInPaise: BigInt(payment.amount),
+            currency: payment.currency,
+            method: payment.method,
+            status: 'captured',
+            captured: payment.captured || false,
+            capturedAt: payment.created_at ? new Date(payment.created_at * 1000) : null,
+            bank: payment.bank || null,
+            vpa: payment.vpa || null,
+            card: payment.card ? JSON.parse(JSON.stringify(payment.card)) : null,
+            fee: payment.fee ? BigInt(payment.fee) : null,
+            tax: payment.tax ? BigInt(payment.tax) : null,
+            signatureValid: true,
+            signatureVerifiedAt: new Date(),
+            verificationMethod: 'hmac',
+            rawPaymentPayload: JSON.parse(JSON.stringify(payment)),
+            clientMeta: client_meta || {},
+          }
+        });
+
+        console.log(`Successfully created payment record with ID: ${paymentRecord.id}`);
+        return paymentRecord;
+      } catch (error) {
+        console.error('Error creating payment record:', error);
+        throw error;
       }
     });
 
@@ -416,20 +430,22 @@ export class NewRazorpayService {
     });
 
     if (payment && payment.status !== 'captured') {
-      await prisma.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: 'captured',
-          captured: true,
-          capturedAt: new Date(),
-          rawPaymentPayload: JSON.parse(JSON.stringify(paymentData)),
-        }
-      });
+      await prisma.$transaction(async (tx) => {
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: 'captured',
+            captured: true,
+            capturedAt: new Date(),
+            rawPaymentPayload: JSON.parse(JSON.stringify(paymentData)),
+          }
+        });
 
-      // Update order status
-      await prisma.order.update({
-        where: { id: payment.localOrderId },
-        data: { status: 'paid' }
+        // Update order status
+        await tx.order.update({
+          where: { id: payment.localOrderId },
+          data: { status: 'paid' }
+        });
       });
       
       console.log(`Payment ${paymentData.id} marked as captured via webhook`);
