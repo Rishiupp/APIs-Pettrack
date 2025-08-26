@@ -5,6 +5,49 @@ import { AppError } from '../../types';
 import { config } from '../../config';
 import { PaymentOrder, PaymentVerification } from '../../types';
 
+// Razorpay API response types
+interface RazorpayOrderResponse {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  created_at: number;
+  error?: {
+    description: string;
+  };
+}
+
+interface RazorpayPaymentResponse {
+  id: string;
+  status: string;
+  method: string;
+  amount: number;
+  currency: string;
+  order_id: string;
+  created_at: number;
+  error?: {
+    description: string;
+  };
+}
+
+interface RazorpayRefundResponse {
+  id: string;
+  amount: number;
+  currency: string;
+  payment_id: string;
+  status: string;
+  created_at: number;
+  error?: {
+    description: string;
+  };
+}
+
+interface RazorpayErrorResponse {
+  error?: {
+    description: string;
+  };
+}
+
 export class RazorpayService {
   // Validate Razorpay configuration
   private static validateRazorpayConfig() {
@@ -62,28 +105,31 @@ export class RazorpayService {
         body: JSON.stringify(requestData),
       });
 
-      const responseData = await response.json();
+      const responseData = await response.json() as RazorpayOrderResponse | RazorpayErrorResponse;
 
       if (!response.ok) {
         // Handle API error response
         console.error('Razorpay API error:', responseData);
+        const errorData = responseData as RazorpayErrorResponse;
         throw new AppError(
-          responseData.error?.description || 'Failed to create Razorpay order',
+          errorData.error?.description || 'Failed to create Razorpay order',
           response.status
         );
       }
 
+      const razorpayOrderData = responseData as RazorpayOrderResponse;
+      
       // Log the response from Razorpay
       console.log('Razorpay order created successfully:', {
-        orderId: responseData.id,
-        amount: responseData.amount,
-        currency: responseData.currency,
-        status: responseData.status
+        orderId: razorpayOrderData.id,
+        amount: razorpayOrderData.amount,
+        currency: razorpayOrderData.currency,
+        status: razorpayOrderData.status
       });
 
       // Ensure we got a valid order ID from Razorpay
-      if (!responseData || !responseData.id) {
-        console.error('Razorpay order creation failed - no order ID in response:', responseData);
+      if (!razorpayOrderData || !razorpayOrderData.id) {
+        console.error('Razorpay order creation failed - no order ID in response:', razorpayOrderData);
         throw new AppError('Failed to create Razorpay order - no order ID received', 500);
       }
 
@@ -96,7 +142,7 @@ export class RazorpayService {
           currency: currency.toUpperCase(),
           paymentPurpose: purpose as PaymentPurpose,
           status: PaymentStatus.initiated,
-          razorpayOrderId: responseData.id,
+          razorpayOrderId: razorpayOrderData.id,
         },
       });
 
@@ -115,17 +161,17 @@ export class RazorpayService {
 
       const finalResponse = {
         paymentEventId: paymentEvent.id,
-        order_id: responseData.id.trim(),
+        order_id: razorpayOrderData.id.trim(),
         key_id: config.razorpay.keyId,
-        amount: Number(responseData.amount) / 100, // Convert back to rupees
-        currency: responseData.currency,
-        createdAt: responseData.created_at,
+        amount: Number(razorpayOrderData.amount) / 100, // Convert back to rupees
+        currency: razorpayOrderData.currency,
+        createdAt: razorpayOrderData.created_at,
       };
 
       // Final validation - ensure all required fields are present
       if (!finalResponse.order_id || finalResponse.order_id === '') {
         console.error('Order ID validation failed - missing in response:', finalResponse);
-        console.error('Original Razorpay order:', responseData);
+        console.error('Original Razorpay order:', razorpayOrderData);
         throw new AppError('Order ID not properly set in response', 500);
       }
 
@@ -193,14 +239,14 @@ export class RazorpayService {
     });
 
     if (!paymentResponse.ok) {
-      const errorData = await paymentResponse.json();
+      const errorData = await paymentResponse.json() as RazorpayErrorResponse;
       throw new AppError(
         errorData.error?.description || 'Failed to fetch payment details',
         paymentResponse.status
       );
     }
 
-    const payment = await paymentResponse.json();
+    const payment = await paymentResponse.json() as RazorpayPaymentResponse;
 
     if (payment.status !== 'captured') {
       await prisma.paymentEvent.update({
@@ -548,14 +594,14 @@ export class RazorpayService {
     });
 
     if (!refundResponse.ok) {
-      const errorData = await refundResponse.json();
+      const errorData = await refundResponse.json() as RazorpayErrorResponse;
       throw new AppError(
         errorData.error?.description || 'Failed to create refund',
         refundResponse.status
       );
     }
 
-    const refund = await refundResponse.json();
+    const refund = await refundResponse.json() as RazorpayRefundResponse;
 
     // Create refund record
     const refundRecord = await prisma.refund.create({

@@ -7,17 +7,27 @@ import { NotificationPreferences, PushNotificationPayload, DeviceRegistration } 
 import { SMSService } from '../sms/sms.service';
 
 // Initialize Firebase Admin SDK
-if (!admin.apps.length && config.firebase.privateKey && config.firebase.projectId && config.firebase.clientEmail) {
+if (!admin.apps.length) {
   try {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: config.firebase.projectId,
-        privateKey: config.firebase.privateKey,
-        clientEmail: config.firebase.clientEmail,
-      }),
-    });
+    if (!config.firebase.projectId || !config.firebase.privateKey || !config.firebase.clientEmail) {
+      console.error('Firebase configuration missing. Push notifications will be disabled.');
+      console.error('Missing:', {
+        projectId: !config.firebase.projectId,
+        privateKey: !config.firebase.privateKey,
+        clientEmail: !config.firebase.clientEmail
+      });
+    } else {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: config.firebase.projectId,
+          privateKey: config.firebase.privateKey,
+          clientEmail: config.firebase.clientEmail,
+        }),
+      });
+      console.log('✓ Firebase Admin SDK initialized successfully');
+    }
   } catch (error) {
-    console.warn('Firebase initialization failed:', error);
+    console.error('Firebase initialization failed:', error);
   }
 }
 
@@ -133,15 +143,16 @@ export class NotificationService {
 
     try {
       if (!admin.apps.length) {
-        console.warn('Firebase is not initialized. Push notifications are disabled.');
-        return {
-          successCount: 0,
-          failureCount: tokens.length,
-          message: 'Firebase not configured',
-        };
+        console.error('Firebase Admin SDK is not initialized. Push notifications are disabled.');
+        throw new AppError('Firebase not configured - push notifications unavailable', 503);
       }
 
+      console.log('Sending push notification to', tokens.length, 'devices');
       const response = await admin.messaging().sendEachForMulticast(message);
+      console.log('Push notification response:', {
+        successCount: response.successCount,
+        failureCount: response.failureCount
+      });
       
       // Handle failed tokens
       if (response.failureCount > 0) {
