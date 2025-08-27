@@ -2,6 +2,8 @@ import { PetStatus, Gender } from '@prisma/client';
 import prisma from '../../config/database';
 import { AppError } from '../../types';
 import { PaginationMeta, PetRegistration, VaccinationInput } from '../../types';
+import { CryptoUtil } from '../../utils/crypto';
+import crypto from 'crypto';
 
 export class PetsService {
   static async createPet(ownerId: string, petData: PetRegistration, registeredBy?: string) {
@@ -95,12 +97,18 @@ export class PetsService {
       },
     });
 
+    // Auto-generate QR Code (Option 1)
+    const qrCode = await this.generateQRCodeForPet(pet);
+
     // Add vaccination records if provided
     if (vaccinations.length > 0) {
       await this.addVaccinationRecords(pet.id, vaccinations);
     }
 
-    return pet;
+    return {
+      ...pet,
+      qrCode
+    };
   }
 
   static async getPetsByOwner(
@@ -492,9 +500,30 @@ export class PetsService {
       throw new AppError('Pet not found', 404);
     }
 
+    // Get the QR code for this pet
+    const qrCode = await prisma.qRCode.findFirst({
+      where: { assignedToPet: petId },
+    });
+
     // Extract request metadata
     const scannerIp = req?.ip || req?.connection?.remoteAddress;
     const userAgent = req?.headers?.['user-agent'];
+
+    // Create QR scan event first (if QR code exists)
+    let qrScanEvent = null;
+    if (qrCode) {
+      qrScanEvent = await prisma.qRScanEvent.create({
+        data: {
+          qrId: qrCode.id,
+          petId: petId,
+          scannerIp,
+          userAgent,
+          scanLocation: `POINT(${longitude} ${latitude})`,
+          locationAccuracy: accuracy?.toString(),
+          scanResult: 'success',
+        },
+      });
+    }
 
     // Create location event
     const locationEvent = await prisma.petLocationEvent.create({
@@ -505,6 +534,7 @@ export class PetsService {
         accuracy,
         scannerIp,
         userAgent,
+        qrScanId: qrScanEvent?.id || null,
         // Store reporter info in scannerContactInfo if provided
         scannerContactInfo: reporterInfo || null,
       },
@@ -585,5 +615,56 @@ export class PetsService {
       locations,
       meta,
     };
+  }
+
+  private static async generateQRCodeForPet(pet: any) {
+    // Step A: Generate unique QR string using pet ID
+    const qrCodeString = `PET_${pet.id.slice(0, 8).toUpperCase()}_${Date.now()}`;
+
+    // Step B: Create pet data for QR code (same format as external QR)
+    const qrData = {
+      petId: pet.id,
+      name: pet.name,
+      species: pet.species?.speciesName || 'Unknown',
+      breed: pet.pet_breeds_pets_breed_idTopet_breeds?.breedName || 'Mixed',
+      gender: pet.gender,
+      ownerName: `${pet.owner.user.firstName} ${pet.owner.user.lastName}`,
+      ownerPhone: pet.owner.user.phone || '',
+      imageUrl: pet.profileImageUrl || ''
+    };
+
+    // Step C: Create external QR URL (like current format)
+    const encodedData = Buffer.from(JSON.stringify(qrData)).toString('base64');
+    const subId = this.generateSubId();
+    const externalQRUrl = `https://pet-trace-1-foundinglabs.replit.app/?data=${encodeURIComponent(encodedData)}&subid1=${subId}`;
+
+    // Step D: Save QR Code record to database
+    const qrCodeHash = CryptoUtil.hashQRCode(qrCodeString);
+    const qrCode = await prisma.qRCode.create({
+      data: {
+        qrCodeString,
+        qrCodeHash,
+        assignedToPet: pet.id,
+        status: 'active',
+        assignedAt: new Date(),
+        activatedAt: new Date()
+      }
+    });
+
+    return {
+      id: qrCode.id,
+      qrCodeString: qrCode.qrCodeString,
+      externalUrl: externalQRUrl,
+      subId: subId,
+      status: qrCode.status,
+      assignedAt: qrCode.assignedAt
+    };
+  }
+
+  private static generateSubId(): string {
+    const date = new Date().toISOString().split('T')[0]?.replace(/-/g, '') || '';
+    const randomBytes = crypto.randomBytes(8).toString('hex');
+    const formatted = `${date}-${randomBytes.slice(0, 4)}-${randomBytes.slice(4, 8)}-${randomBytes.slice(8, 12)}-${randomBytes.slice(12, 16)}`;
+    return formatted;
   }
 }

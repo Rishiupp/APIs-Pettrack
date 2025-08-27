@@ -154,6 +154,7 @@ model Pet {
   notifications                                  Notification[]
   paymentEvents                                  PaymentEvent[]
   locationEvents                                 PetLocationEvent[]
+  qrScanEvents                                   QRScanEvent[]
   pet_breeds_pets_breed_idTopet_breeds           PetBreed?           @relation("pets_breed_idTopet_breeds", fields: [breed_id], references: [id])
   owner                                          PetOwner            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   registeredByUser                               User?               @relation("RegisteredBy", fields: [registeredBy], references: [id])
@@ -249,6 +250,7 @@ model QRCode {
 model QRScanEvent {
   id                 String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   qrId               String      @map("qr_id") @db.Uuid
+  petId              String?     @map("pet_id") @db.Uuid
   scanTimestamp      DateTime    @default(now()) @map("scan_timestamp")
   scannerIp          String?     @map("scanner_ip") @db.Inet
   userAgent          String?     @map("user_agent")
@@ -261,27 +263,31 @@ model QRScanEvent {
   scannerContactInfo Json?       @map("scanner_contact_info")
   scanResult         ScanResult
   createdAt          DateTime    @default(now()) @map("created_at")
-  qrCode             QRCode      @relation(fields: [qrId], references: [id])
+  qrCode             QRCode             @relation(fields: [qrId], references: [id])
+  pet                Pet?               @relation(fields: [petId], references: [id])
+  locationEvents     PetLocationEvent[]
 
   @@map("qr_scan_events")
 }
 
 model PetLocationEvent {
-  id                 String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  petId              String      @map("pet_id") @db.Uuid
-  latitude           Decimal     @db.Decimal(10, 8)
-  longitude          Decimal     @db.Decimal(11, 8)
-  accuracy           Decimal?    @db.Decimal(8, 2)
-  scannerIp          String?     @map("scanner_ip") @db.Inet
-  userAgent          String?     @map("user_agent")
-  deviceType         DeviceType? @default(mobile) @map("device_type")
-  locationName       String?     @map("location_name") @db.VarChar(255)
-  countryCode        String?     @map("country_code") @db.Char(2)
-  city               String?     @db.VarChar(100)
-  state              String?     @db.VarChar(100)
-  scannerContactInfo Json?       @map("scanner_contact_info")
-  createdAt          DateTime    @default(now()) @map("created_at")
-  pet                Pet         @relation(fields: [petId], references: [id], onDelete: Cascade)
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  petId              String        @map("pet_id") @db.Uuid
+  qrScanId           String?       @map("qr_scan_id") @db.Uuid
+  latitude           Decimal       @db.Decimal(10, 8)
+  longitude          Decimal       @db.Decimal(11, 8)
+  accuracy           Decimal?      @db.Decimal(8, 2)
+  scannerIp          String?       @map("scanner_ip") @db.Inet
+  userAgent          String?       @map("user_agent")
+  deviceType         DeviceType?   @default(mobile) @map("device_type")
+  locationName       String?       @map("location_name") @db.VarChar(255)
+  countryCode        String?       @map("country_code") @db.Char(2)
+  city               String?       @db.VarChar(100)
+  state              String?       @db.VarChar(100)
+  scannerContactInfo Json?         @map("scanner_contact_info")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  pet                Pet           @relation(fields: [petId], references: [id], onDelete: Cascade)
+  qrScanEvent        QRScanEvent?  @relation(fields: [qrScanId], references: [id])
 
   @@map("pet_location_events")
 }
