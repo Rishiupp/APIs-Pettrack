@@ -299,7 +299,7 @@ export class RazorpayService {
       data: {
         eventId: payload.event,
         eventType: payload.event,
-        entityType: payload.payload?.payment?.entity || 'unknown',
+        entityType: payload.payload?.payment?.entity?.entity || 'payment',
         entityId: payload.payload?.payment?.entity?.id || 'unknown',
         payload,
         signature,
