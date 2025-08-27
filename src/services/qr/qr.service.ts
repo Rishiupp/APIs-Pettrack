@@ -364,9 +364,7 @@ export class QRService {
     const [scans, total] = await Promise.all([
       prisma.qRScanEvent.findMany({
         where: {
-          qrCode: {
-            assignedToPet: petId,
-          },
+          petId: petId,
         },
         orderBy: { scanTimestamp: 'desc' },
         skip: offset,
@@ -374,9 +372,7 @@ export class QRService {
       }),
       prisma.qRScanEvent.count({
         where: {
-          qrCode: {
-            assignedToPet: petId,
-          },
+          petId: petId,
         },
       }),
     ]);
@@ -418,9 +414,7 @@ export class QRService {
 
     const scanLocations = await prisma.qRScanEvent.findMany({
       where: {
-        qrCode: {
-          assignedToPet: petId,
-        },
+        petId: petId,
         scanLocation: {
           not: null,
         },
@@ -493,10 +487,8 @@ export class QRService {
     // Get latest QR scans for all user's pets
     const latestScans = await prisma.qRScanEvent.findMany({
       where: {
-        qrCode: {
-          assignedToPet: {
-            in: petIds,
-          },
+        petId: {
+          in: petIds,
         },
         scanLocation: {
           not: null,
@@ -514,15 +506,11 @@ export class QRService {
         countryCode: true,
         scanTimestamp: true,
         deviceType: true,
-        qrCode: {
+        petId: true,
+        pet: {
           select: {
-            assignedToPet: true,
-            pet: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+            id: true,
+            name: true,
           },
         },
       },
@@ -552,8 +540,8 @@ export class QRService {
         countryCode: scan.countryCode,
         timestamp: scan.scanTimestamp,
         deviceType: scan.deviceType,
-        petId: scan.qrCode.assignedToPet,
-        petName: scan.qrCode.pet?.name || 'Unknown Pet',
+        petId: scan.petId,
+        petName: scan.pet?.name || 'Unknown Pet',
       };
     }).filter(location => location.latitude && location.longitude);
 
