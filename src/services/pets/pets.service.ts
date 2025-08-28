@@ -549,8 +549,41 @@ export class PetsService {
       },
     });
 
-    // Note: Notification creation temporarily disabled
-    // TODO: Fix NotificationType enum and re-enable notifications
+    // Send notification to pet owner about location report
+    if (pet.owner?.user) {
+      try {
+        const { NotificationService } = await import('../notifications/notification.service');
+        
+        // Create a mock scan event for the notification system
+        const mockScanEvent = {
+          id: qrScanEvent?.id || locationEvent.id,
+          locationName: 'Unknown location',
+          scanTimestamp: locationEvent.createdAt,
+        };
+
+        // Extract reporter info for the notification
+        const reporterName = reporterInfo?.name || reporterInfo?.phone || 'Someone';
+        
+        await NotificationService.createNotification({
+          userId: pet.owner.userId,
+          petId: petId,
+          qrScanId: qrScanEvent?.id,
+          type: 'qr_scan',
+          title: `${pet.name} was spotted!`,
+          message: `${reporterName} reported ${pet.name}'s location`,
+          channels: ['push', 'sms'],
+          metadata: {
+            latitude,
+            longitude,
+            accuracy,
+            reporterInfo,
+            timestamp: locationEvent.createdAt,
+          },
+        });
+      } catch (error) {
+        console.error('Failed to send location notification:', error);
+      }
+    }
 
     return locationEvent;
   }
