@@ -148,11 +148,24 @@ export class NotificationService {
       }
 
       console.log('Sending push notification to', tokens.length, 'devices');
+      console.log('FCM Tokens:', tokens);
+      console.log('Message payload:', JSON.stringify(message, null, 2));
+      
       const response = await admin.messaging().sendEachForMulticast(message);
       console.log('Push notification response:', {
         successCount: response.successCount,
         failureCount: response.failureCount
       });
+      
+      // Log individual response details
+      if (response.failureCount > 0) {
+        console.log('Failed responses:');
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            console.log(`Token ${idx} (${tokens[idx]}):`, resp.error);
+          }
+        });
+      }
       
       // Handle failed tokens
       if (response.failureCount > 0) {
